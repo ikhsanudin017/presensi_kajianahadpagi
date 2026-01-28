@@ -8,9 +8,10 @@ const updateSchema = z.object({
   gender: z.enum(["L", "P"]).nullable().optional(),
 });
 
-type Params = { params: { id: string } };
+type ParamsPromise = { params: Promise<{ id: string }> };
 
-export async function PATCH(req: Request, { params }: Params) {
+export async function PATCH(req: Request, { params }: ParamsPromise) {
+  const { id } = await params;
   const body = await req.json().catch(() => null);
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
@@ -19,7 +20,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   try {
     const updated = await prisma.participant.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name: parsed.data.name,
         address: parsed.data.address ?? null,
@@ -42,9 +43,10 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(_req: Request, { params }: ParamsPromise) {
   try {
-    await prisma.participant.delete({ where: { id: params.id } });
+    const { id } = await params;
+    await prisma.participant.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {
     if (typeof error === "object" && error && "code" in error) {

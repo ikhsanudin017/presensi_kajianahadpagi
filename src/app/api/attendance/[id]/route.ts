@@ -7,11 +7,12 @@ const patchSchema = z.object({
   eventDate: z.string().optional(), // ISO date string YYYY-MM-DD
 });
 
-type Params = {
-  params: { id: string };
+type ParamsPromise = {
+  params: Promise<{ id: string }>;
 };
 
-export async function PATCH(req: Request, { params }: Params) {
+export async function PATCH(req: Request, { params }: ParamsPromise) {
+  const { id } = await params;
   const body = await req.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);
 
@@ -28,7 +29,7 @@ export async function PATCH(req: Request, { params }: Params) {
     }
 
     const updated = await prisma.attendance.update({
-      where: { id: params.id },
+      where: { id },
       data: dataToUpdate,
       include: { participant: true },
     });
@@ -49,9 +50,10 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(_req: Request, { params }: ParamsPromise) {
   try {
-    await prisma.attendance.delete({ where: { id: params.id } });
+    const { id } = await params;
+    await prisma.attendance.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {
     if (typeof error === "object" && error && "code" in error) {

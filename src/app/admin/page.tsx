@@ -436,6 +436,7 @@ export default function AdminPage() {
             <ParticipantCombobox
               value={editAttendanceParticipant ?? undefined}
               onSelect={(p) => setEditAttendanceParticipant(p)}
+              onCreateNew={() => {}}
             />
             <div>
               <label className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">

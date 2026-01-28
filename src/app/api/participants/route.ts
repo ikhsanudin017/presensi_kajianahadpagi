@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { appendRow } from "@/lib/googleSheets";
 
 const participantSchema = z.object({
@@ -16,7 +17,7 @@ export async function GET(req: Request) {
   const page = Number(searchParams.get("page") ?? "1");
   const skip = page > 1 && Number.isFinite(page) ? (page - 1) * take : 0;
 
-  const where = query
+  const where: Prisma.ParticipantWhereInput | undefined = query
     ? {
         name: {
           contains: query,
