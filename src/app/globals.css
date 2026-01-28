@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+:root {
+  /* Modern-clean-luxury: ivory base, deep emerald, satin gold */
+  --background: 45 32% 97%;
+  --foreground: 152 18% 14%;
+  --card: 45 28% 99%;
+  --card-foreground: 152 18% 14%;
+  --muted: 45 20% 92%;
+  --muted-foreground: 152 12% 38%;
+  --border: 45 16% 82%;
+  --primary: 154 36% 26%; /* deep emerald */
+  --primary-foreground: 45 72% 95%;
+  --accent: 44 78% 56%; /* satin gold */
+  --accent-foreground: 152 18% 14%;
+  --ring: 154 36% 26%;
+  --radius: 18px;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-border: hsl(var(--border));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-ring: hsl(var(--ring));
+  --radius-md: var(--radius);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+}
+
+body {
+  color: hsl(var(--foreground));
+  background:
+    radial-gradient(1200px 520px at 70% -10%, rgba(31, 95, 69, 0.16), transparent),
+    radial-gradient(920px 520px at 12% 18%, rgba(214, 178, 82, 0.15), transparent),
+    linear-gradient(135deg, #fbf9f4 0%, #f4eee4 40%, #fbf9f4 100%);
+  font-family: var(--font-sans), "Source Sans 3", "Segoe UI", sans-serif;
+  min-height: 100vh;
+}
+
+.ornament {
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(28, 82, 62, 0.12) 0 2px, transparent 2px),
+    radial-gradient(circle at 80% 12%, rgba(201, 153, 48, 0.12) 0 2px, transparent 2px);
+  background-size: 140px 140px, 140px 140px;
+}
+
+.glass {
+  background: rgba(255, 253, 248, 0.95);
+  border: 1px solid hsl(var(--border));
+  box-shadow:
+    0 18px 48px rgba(31, 95, 69, 0.12),
+    0 2px 14px rgba(31, 95, 69, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.arabic-accent {
+  font-family: var(--font-arabic), "Noto Naskh Arabic", serif;
+  letter-spacing: 0.02em;
+}
+
+.hero-band {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-band::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(31, 95, 69, 0.2), rgba(255, 255, 255, 0.35)),
+    radial-gradient(circle at 10% 10%, rgba(214, 178, 82, 0.22), transparent 35%),
+    radial-gradient(circle at 82% 0%, rgba(31, 95, 69, 0.16), transparent 40%),
+    repeating-linear-gradient(
+      135deg,
+      rgba(31, 95, 69, 0.04),
+      rgba(31, 95, 69, 0.04) 10px,
+      rgba(255, 255, 255, 0.05) 10px,
+      rgba(255, 255, 255, 0.05) 22px
+    );
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.hero-pattern {
+  background: none;
+}
+
+.header-plain {
+  background: linear-gradient(120deg, rgba(31, 95, 69, 0.14), rgba(251, 249, 244, 0.96));
+  box-shadow: 0 10px 30px rgba(31, 95, 69, 0.08);
+}
+
+.nav-pill {
+  position: relative;
+}
+
+.nav-pill::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(31, 95, 69, 0.2),
+    rgba(214, 178, 82, 0.7),
+    rgba(31, 95, 69, 0.2)
+  );
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.nav-pill:hover::after,
+.nav-pill:focus-visible::after {
+  opacity: 1;
+}

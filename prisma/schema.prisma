@@ -1,0 +1,38 @@
+// Prisma schema for Vercel Postgres
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Gender {
+  L
+  P
+}
+
+model Participant {
+  id        String      @id @default(cuid())
+  name      String      @db.VarChar(255)
+  address   String?     @db.VarChar(255)
+  gender    Gender?
+  createdAt DateTime    @default(now())
+  attendance Attendance[]
+
+  @@index([name])
+}
+
+model Attendance {
+  id            String      @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id])
+  eventDate     DateTime    @db.Date
+  createdAt     DateTime    @default(now())
+  deviceId      String?
+
+  @@unique([participantId, eventDate])
+  @@index([eventDate])
+}
