@@ -20,14 +20,23 @@ export function SiteHeader() {
             </span>
           </div>
         </div>
-        <nav className="flex items-center gap-2 text-sm font-semibold">
-          <Link className="nav-pill rounded-full px-3 py-2 hover:bg-[hsl(var(--muted))]" href="/">
+        <nav className="flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-white/80 px-2 py-1 text-sm font-semibold shadow-sm">
+          <Link
+            className="nav-pill rounded-full px-4 py-2 transition hover:bg-[hsl(var(--primary))/0.1] hover:text-[hsl(var(--primary))]"
+            href="/"
+          >
             Presensi
           </Link>
-          <Link className="nav-pill rounded-full px-3 py-2 hover:bg-[hsl(var(--muted))]" href="/leaderboard">
+          <Link
+            className="nav-pill rounded-full px-4 py-2 transition hover:bg-[hsl(var(--primary))/0.1] hover:text-[hsl(var(--primary))]"
+            href="/leaderboard"
+          >
             Leaderboard
           </Link>
-          <Link className="nav-pill rounded-full px-3 py-2 hover:bg-[hsl(var(--muted))]" href="/admin">
+          <Link
+            className="nav-pill rounded-full px-4 py-2 transition hover:bg-[hsl(var(--primary))/0.1] hover:text-[hsl(var(--primary))]"
+            href="/admin"
+          >
             Admin
           </Link>
         </nav>
