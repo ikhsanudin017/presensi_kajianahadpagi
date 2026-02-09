@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { ParticipantCombobox, type Participant } from "@/components/participant-combobox";
 import { useToast } from "@/components/ui/use-toast";
+import { safeJson } from "@/lib/http";
 import { PenLine, Trash2, ChevronDown } from "lucide-react";
 
 dayjs.extend(utc);
@@ -73,8 +74,8 @@ export default function AdminPage() {
           ? `date=${encodeURIComponent(date)}`
           : `range=${encodeURIComponent(range)}`;
       const res = await fetch(`/api/attendance?${params}&q=${encodeURIComponent(query)}`);
-      const json = await res.json();
-      setData(json.data ?? []);
+      const json = await safeJson<{ data?: AttendanceRow[] }>(res);
+      setData(json?.data ?? []);
     } catch (error) {
       console.error(error);
     } finally {
@@ -82,15 +83,54 @@ export default function AdminPage() {
     }
   }, [date, query, range]);
 
+  const downloadFile = async (url: string, filename: string) => {
+    const res = await fetch(url);
+    if (!res.ok) {
+      showToast({ title: "Gagal mengunduh", description: "Server mengembalikan error." });
+      return;
+    }
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(href);
+  };
+
+  const handleDownloadAttendance = () => {
+    const params =
+      range === "single"
+        ? `range=single&date=${encodeURIComponent(date)}`
+        : `range=${encodeURIComponent(range)}`;
+    const url = `/api/admin/export/attendance?${params}&q=${encodeURIComponent(query)}`;
+    downloadFile(url, `presensi-${range}.csv`);
+  };
+
+  const handleDownloadLeaderboard = () => {
+    const { leaderboardRange, weeks } =
+      range === "last30"
+        ? { leaderboardRange: "30d", weeks: 4 }
+        : range === "year"
+          ? { leaderboardRange: "year", weeks: 52 }
+          : { leaderboardRange: "all", weeks: 24 };
+    const url = `/api/admin/export/leaderboard?range=${encodeURIComponent(
+      range === "single" ? "all" : leaderboardRange,
+    )}&weeks=${weeks}`;
+    downloadFile(url, `leaderboard-${leaderboardRange}.csv`);
+  };
+
   const fetchParticipants = React.useCallback(async () => {
     setParticipantLoading(true);
     try {
       const res = await fetch(
         `/api/participants?q=${encodeURIComponent(participantSearch)}&limit=200`
       );
-      const json = await res.json();
-      setParticipants(json.data ?? []);
-      setParticipantTotal(json.meta?.total ?? (json.data?.length ?? 0));
+      const json = await safeJson<{ data?: ParticipantRow[]; meta?: { total?: number } }>(res);
+      setParticipants(json?.data ?? []);
+      setParticipantTotal(json?.meta?.total ?? (json?.data?.length ?? 0));
     } catch (error) {
       console.error(error);
     } finally {
@@ -131,8 +171,8 @@ export default function AdminPage() {
           eventDate: editAttendanceDate,
         }),
       });
-      const json = await res.json();
-      if (!json.ok) {
+      const json = await safeJson<{ ok?: boolean }>(res);
+      if (!json?.ok) {
         showToast({ title: "Gagal menyimpan perubahan" });
         return;
       }
@@ -156,8 +196,8 @@ export default function AdminPage() {
         method: "DELETE",
         headers: { Accept: "application/json" },
       });
-      const json = await res.json().catch(() => ({ ok: false }));
-      if (!json.ok) {
+      const json = await safeJson<{ ok?: boolean }>(res);
+      if (!json?.ok) {
         showToast({ title: "Gagal menghapus presensi" });
         return;
       }
@@ -192,8 +232,8 @@ export default function AdminPage() {
           gender: editParticipantGender || null,
         }),
       });
-      const json = await res.json();
-      if (!json.ok) {
+      const json = await safeJson<{ ok?: boolean }>(res);
+      if (!json?.ok) {
         showToast({ title: "Gagal menyimpan data peserta" });
         return;
       }
@@ -214,8 +254,8 @@ export default function AdminPage() {
     setDeleteParticipantId(p.id);
     try {
       const res = await fetch(`/api/participants/${p.id}`, { method: "DELETE" });
-      const json = await res.json();
-      if (!json.ok) {
+      const json = await safeJson<{ ok?: boolean }>(res);
+      if (!json?.ok) {
         showToast({ title: "Gagal menghapus peserta" });
         return;
       }
@@ -240,6 +280,14 @@ export default function AdminPage() {
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
             Filter presensi berdasarkan tanggal dan pencarian nama.
           </p>
+          <div className="mt-4 flex flex-wrap gap-2 md:justify-end">
+            <Button variant="outline" size="sm" onClick={handleDownloadAttendance}>
+              Unduh Presensi (Excel)
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDownloadLeaderboard}>
+              Unduh Leaderboard (Excel)
+            </Button>
+          </div>
           <div className="mt-6 grid gap-4 md:grid-cols-[200px_1fr_auto]">
             <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">

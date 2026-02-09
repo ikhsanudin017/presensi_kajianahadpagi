@@ -5,6 +5,7 @@ import { ChevronsUpDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { safeJson } from "@/lib/http";
 import { cn } from "@/lib/utils";
 
 export type Participant = {
@@ -39,8 +40,8 @@ export function ParticipantCombobox({ value, onSelect, onCreateNew, open: openPr
       setLoading(true);
       try {
         const res = await fetch(`/api/participants?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
-        setItems(data.data ?? []);
+        const data = await safeJson<{ data?: Participant[] }>(res);
+        setItems(data?.data ?? []);
       } catch (error) {
         console.error(error);
       } finally {

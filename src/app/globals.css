@@ -19,6 +19,11 @@
   --danger-foreground: 0 0% 100%;
   --ring: 217 90% 56%;
   --radius: 16px;
+
+  /* Font fallback lokal (tanpa unduh dari Google Fonts) */
+  --font-sans: "Segoe UI", "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-display: "Georgia", "Times New Roman", serif;
+  --font-arabic: "Scheherazade New", "Amiri", "Times New Roman", serif;
 }
 
 @theme inline {
@@ -42,7 +47,7 @@
 body {
   color: hsl(var(--foreground));
   background: linear-gradient(180deg, #f7f8fb 0%, #f4f6fb 60%, #f5f6fa 100%);
-  font-family: var(--font-sans), "Source Sans 3", "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   min-height: 100vh;
 }
 
@@ -63,7 +68,7 @@ body {
 }
 
 .arabic-accent {
-  font-family: var(--font-arabic), "Noto Naskh Arabic", serif;
+  font-family: var(--font-arabic);
   letter-spacing: 0.02em;
 }
 

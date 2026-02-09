@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import { safeJson } from "@/lib/http";
 
 type Props = {
   open: boolean;
@@ -45,12 +46,18 @@ export function AddParticipantDialog({ open, initialName, onOpenChange, onCreate
           gender: gender || undefined,
         }),
       });
-      const data = await res.json();
-      if (!data.ok) {
+      const data = await safeJson<{
+        ok?: boolean;
+        data?: { id: string; name: string; address?: string | null; gender?: "L" | "P" | null };
+        warning?: string | null;
+      }>(res);
+      if (!data?.ok) {
         showToast({ title: "Gagal menambah peserta" });
         return;
       }
-      onCreated(data.data);
+      if (data.data) {
+        onCreated(data.data);
+      }
       onOpenChange(false);
       showToast({
         title: "Peserta baru ditambahkan",

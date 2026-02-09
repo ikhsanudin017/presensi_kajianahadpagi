@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import { safeJson } from "@/lib/http";
 
 const STORAGE_KEY = "alirsyad_authed";
 
@@ -21,9 +22,14 @@ export function PinGate({ children }: { children: React.ReactNode }) {
       return;
     }
     fetch("/api/pin")
-      .then((res) => res.json())
+      .then((res) => safeJson<{ enabled?: boolean }>(res))
       .then((data) => {
-        if (!data.enabled) {
+        const enabled = data?.enabled;
+        if (typeof enabled !== "boolean") {
+          setOpen(true);
+          return;
+        }
+        if (!enabled) {
           localStorage.setItem(STORAGE_KEY, "true");
           setOpen(false);
         } else {
@@ -41,8 +47,8 @@ export function PinGate({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin }),
       });
-      const data = await res.json();
-      if (data.ok) {
+      const data = await safeJson<{ ok?: boolean }>(res);
+      if (data?.ok) {
         localStorage.setItem(STORAGE_KEY, "true");
         setOpen(false);
         showToast({ title: "PIN valid", description: "Akses terbuka untuk device ini." });

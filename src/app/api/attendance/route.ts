@@ -7,6 +7,7 @@ import { toEventDate } from "@/lib/time";
 const markSchema = z.object({
   participantId: z.string().min(1),
   deviceId: z.string().optional(),
+  eventDate: z.string().optional(), // YYYY-MM-DD (opsional)
 });
 
 export async function GET(req: Request) {
@@ -71,8 +72,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "INVALID_INPUT" }, { status: 400 });
   }
 
-  const { participantId, deviceId } = parsed.data;
-  const eventDate = toEventDate();
+  const { participantId, deviceId, eventDate: eventDateStr } = parsed.data;
+  const eventDate = eventDateStr ? toEventDate(eventDateStr) : toEventDate();
 
   const existing = await prisma.attendance.findUnique({
     where: {

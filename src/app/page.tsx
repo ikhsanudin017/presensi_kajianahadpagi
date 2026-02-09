@@ -9,6 +9,7 @@ import { AddParticipantDialog } from "@/components/add-participant-dialog";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import { useDeviceId } from "@/lib/device";
+import { safeJson } from "@/lib/http";
 import { useToast } from "@/components/ui/use-toast";
 import { PinGate } from "@/components/pin-gate";
 import { Trash2 } from "lucide-react";
@@ -33,12 +34,13 @@ export default function HomePage() {
   const [comboOpen, setComboOpen] = React.useState(false);
   const [deleteLoadingId, setDeleteLoadingId] = React.useState<string | null>(null);
   const today = dayjs().tz("Asia/Jakarta").format("YYYY-MM-DD");
+  const [sessionDate, setSessionDate] = React.useState(today);
 
   const refreshAttendance = React.useCallback(async () => {
     try {
       const res = await fetch(`/api/attendance?date=${today}&limit=20`);
-      const data = await res.json();
-      setAttendance(data.data ?? []);
+      const data = await safeJson<{ data?: AttendanceEntry[] }>(res);
+      setAttendance(data?.data ?? []);
     } catch (error) {
       console.error(error);
     }
@@ -62,10 +64,14 @@ export default function HomePage() {
       const res = await fetch("/api/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ participantId: selected.id, deviceId }),
+        body: JSON.stringify({
+          participantId: selected.id,
+          deviceId,
+          eventDate: sessionDate,
+        }),
       });
-      const data = await res.json();
-      if (!data.ok) {
+      const data = await safeJson<{ ok?: boolean; status?: string; warning?: string | null }>(res);
+      if (!data?.ok) {
         showToast({ title: "Gagal menyimpan presensi" });
         return;
       }
@@ -77,7 +83,7 @@ export default function HomePage() {
       } else {
         showToast({
           title: "Presensi tersimpan",
-          description: `${selected.name} tercatat hadir untuk ${today}`,
+      description: `${selected.name} tercatat hadir untuk ${sessionDate}`,
         });
       }
       if (data.warning) {
@@ -105,10 +111,8 @@ export default function HomePage() {
         method: "DELETE",
         headers: { Accept: "application/json" },
       });
-      const data = await res
-        .json()
-        .catch(() => ({ ok: false, error: `HTTP_${res.status}` }));
-      if (!data.ok) {
+      const data = await safeJson<{ ok?: boolean }>(res);
+      if (!data?.ok) {
         showToast({ title: "Gagal menghapus presensi" });
         return;
       }
@@ -137,6 +141,19 @@ export default function HomePage() {
           </div>
           <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
             <div className="space-y-2">
+              <div className="grid gap-2 md:grid-cols-1">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">
+                    Tanggal Kajian
+                  </p>
+                  <input
+                    type="date"
+                    value={sessionDate}
+                    onChange={(e) => setSessionDate(e.target.value)}
+                    className="w-full rounded-[var(--radius)] border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
               <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Nama Peserta</p>
               <ParticipantCombobox
                 value={selected ?? undefined}
