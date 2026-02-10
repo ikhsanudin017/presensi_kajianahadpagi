@@ -9,7 +9,7 @@ const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     className={cn(
-      "flex h-full w-full flex-col overflow-hidden rounded-[var(--radius)] bg-[hsl(var(--card))] text-[hsl(var(--foreground))]",
+      "flex h-full w-full flex-col overflow-hidden rounded-[calc(var(--radius)+4px)] bg-[hsl(var(--card))/0.96] text-[hsl(var(--foreground))]",
       className
     )}
     {...props}
@@ -21,7 +21,7 @@ const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => (
-  <div className="flex items-center border-b border-[hsl(var(--border))] px-3">
+  <div className="flex items-center border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))/0.44] px-3">
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
@@ -77,7 +77,7 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "flex cursor-pointer select-none items-center gap-2 rounded-[calc(var(--radius)-4px)] px-2 py-2 text-sm aria-selected:bg-[hsl(var(--muted))] aria-selected:text-[hsl(var(--foreground))]",
+      "flex cursor-pointer select-none items-center gap-2 rounded-[calc(var(--radius)-2px)] px-2 py-2 text-sm aria-selected:bg-[hsl(var(--muted))/0.82] aria-selected:text-[hsl(var(--foreground))]",
       className
     )}
     {...props}

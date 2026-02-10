@@ -55,12 +55,12 @@ export function ParticipantCombobox({ value, onSelect, onCreateNew, open: openPr
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-full justify-between">
+        <Button variant="outline" className="h-11 w-full justify-between">
           {value ? value.name : "Pilih peserta"}
           <ChevronsUpDown className="h-4 w-4 opacity-60" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[min(380px,90vw)] p-0" align="start">
+      <PopoverContent className="w-[min(410px,92vw)] p-0" align="start">
         <Command>
           <CommandInput placeholder="Cari nama peserta..." value={query} onValueChange={setQuery} />
           <CommandList>

@@ -4,15 +4,17 @@ import * as React from "react";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
+import Image from "next/image";
+import { Trash2 } from "lucide-react";
 import { ParticipantCombobox, type Participant } from "@/components/participant-combobox";
 import { AddParticipantDialog } from "@/components/add-participant-dialog";
-import { SiteHeader } from "@/components/site-header";
+import { SiteShell } from "@/components/site/SiteShell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useDeviceId } from "@/lib/device";
 import { safeJson } from "@/lib/http";
 import { useToast } from "@/components/ui/use-toast";
 import { PinGate } from "@/components/pin-gate";
-import { Trash2 } from "lucide-react";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -128,79 +130,94 @@ export default function HomePage() {
 
   return (
     <PinGate>
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-5xl px-6 pb-16 pt-10">
-        <section className="glass rounded-[calc(var(--radius)+6px)] p-6 shadow-lg">
-          <div className="flex flex-col gap-2">
-            <h2 className="font-[var(--font-display)] text-2xl text-[hsl(var(--foreground))]">
-              Presensi Kajian Ahad Pagi
-            </h2>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Hari ini: <span className="font-semibold text-[hsl(var(--foreground))]">{today}</span>
-            </p>
+      <SiteShell>
+        <section className="site-main-card relative overflow-hidden p-5 md:p-8">
+          <div className="pointer-events-none absolute inset-0">
+            <Image
+              src="/assets/card-mosque-watermark.png"
+              alt=""
+              fill
+              sizes="(max-width: 768px) 100vw, 980px"
+              className="object-cover opacity-20"
+            />
           </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+
+          <div className="relative z-10">
             <div className="space-y-2">
-              <div className="grid gap-2 md:grid-cols-1">
+              <p className="site-label">Form Presensi</p>
+              <h2 className="site-title text-2xl text-[hsl(var(--foreground))] md:text-3xl">
+                Presensi Kajian Ahad Pagi
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                Hari ini: <span className="font-semibold text-[hsl(var(--foreground))]">{today}</span>
+              </p>
+            </div>
+
+            <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="space-y-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">
-                    Tanggal Kajian
-                  </p>
-                  <input
+                  <p className="site-label mb-2">Tanggal Kajian</p>
+                  <Input
                     type="date"
                     value={sessionDate}
                     onChange={(e) => setSessionDate(e.target.value)}
-                    className="w-full rounded-[var(--radius)] border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm"
+                    className="md:max-w-[340px]"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <p className="site-label">Nama Peserta</p>
+                  <ParticipantCombobox
+                    value={selected ?? undefined}
+                    open={comboOpen}
+                    onOpenChange={setComboOpen}
+                    onSelect={(participant) => setSelected(participant)}
+                    onCreateNew={(name) => {
+                      setPresetName(name);
+                      setModalOpen(true);
+                    }}
+                  />
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-center md:max-w-[340px]"
+                  onClick={() => setComboOpen(true)}
+                >
+                  Cari
+                </Button>
               </div>
-              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Nama Peserta</p>
-              <ParticipantCombobox
-                value={selected ?? undefined}
-                open={comboOpen}
-                onOpenChange={setComboOpen}
-                onSelect={(participant) => setSelected(participant)}
-                onCreateNew={(name) => {
-                  setPresetName(name);
-                  setModalOpen(true);
-                }}
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-center"
-                onClick={() => setComboOpen(true)}
-              >
-                Cari
-              </Button>
-            </div>
-            <div className="flex flex-col gap-2 md:items-end">
-              <Button onClick={markAttendance} disabled={loading} className="w-full md:w-auto">
-                {loading ? "Menyimpan..." : "Hadir"}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full md:w-auto"
-                onClick={() => {
-                  setPresetName("");
-                  setModalOpen(true);
-                }}
-              >
-                Tambah Nama Baru
-              </Button>
+
+              <div className="flex flex-col gap-3 lg:justify-end">
+                <Button onClick={markAttendance} disabled={loading} className="w-full">
+                  {loading ? "Menyimpan..." : "Hadir"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setPresetName("");
+                    setModalOpen(true);
+                  }}
+                >
+                  Tambah Nama Baru
+                </Button>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="mt-8 rounded-[calc(var(--radius)+6px)] border border-[hsl(var(--border))] bg-white/70 p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="font-[var(--font-display)] text-xl text-[hsl(var(--foreground))]">
+        <section className="site-soft-card mt-7 p-5 md:p-6">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">
               Presensi Hari Ini
             </h3>
             <Button variant="ghost" size="sm" onClick={refreshAttendance}>
               Refresh
             </Button>
           </div>
+
           <div className="mt-4 space-y-3">
             {attendance.length === 0 ? (
               <p className="text-sm text-[hsl(var(--muted-foreground))]">Belum ada presensi hari ini.</p>
@@ -208,22 +225,21 @@ export default function HomePage() {
               attendance.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3"
+                  className="site-card-list-row flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between"
                 >
                   <div>
-                    <p className="font-semibold">{item.participant.name}</p>
+                    <p className="font-semibold text-[hsl(var(--foreground))]">{item.participant.name}</p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))]">
                       {dayjs(item.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB
                     </p>
                   </div>
+
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-[hsl(var(--muted))] px-3 py-1 text-xs font-semibold text-[hsl(var(--foreground))]">
-                      Hadir
-                    </span>
+                    <span className="site-chip">Hadir</span>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="gap-1 text-red-700 hover:text-red-800"
+                      className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
                       onClick={() => handleDelete(item)}
                       disabled={deleteLoadingId === item.id}
                     >
@@ -236,7 +252,7 @@ export default function HomePage() {
             )}
           </div>
         </section>
-      </main>
+      </SiteShell>
 
       <AddParticipantDialog
         open={modalOpen}

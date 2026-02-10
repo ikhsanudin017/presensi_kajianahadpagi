@@ -1,11 +1,12 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
+import { PenLine, Trash2, ChevronDown } from "lucide-react";
 import { PinGate } from "@/components/pin-gate";
-import { SiteHeader } from "@/components/site-header";
+import { SiteShell } from "@/components/site/SiteShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,7 +19,6 @@ import {
 import { ParticipantCombobox, type Participant } from "@/components/participant-combobox";
 import { useToast } from "@/components/ui/use-toast";
 import { safeJson } from "@/lib/http";
-import { PenLine, Trash2, ChevronDown } from "lucide-react";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -125,9 +125,7 @@ export default function AdminPage() {
   const fetchParticipants = React.useCallback(async () => {
     setParticipantLoading(true);
     try {
-      const res = await fetch(
-        `/api/participants?q=${encodeURIComponent(participantSearch)}&limit=200`
-      );
+      const res = await fetch(`/api/participants?q=${encodeURIComponent(participantSearch)}&limit=200`);
       const json = await safeJson<{ data?: ParticipantRow[]; meta?: { total?: number } }>(res);
       setParticipants(json?.data ?? []);
       setParticipantTotal(json?.meta?.total ?? (json?.data?.length ?? 0));
@@ -271,15 +269,14 @@ export default function AdminPage() {
 
   return (
     <PinGate>
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-5xl px-6 pb-16 pt-10">
-        <section className="glass rounded-[calc(var(--radius)+6px)] p-6 shadow-lg">
-          <h2 className="font-[var(--font-display)] text-2xl text-[hsl(var(--foreground))]">
-            Admin Presensi
-          </h2>
+      <SiteShell>
+        <section className="site-main-card p-5 md:p-6">
+          <p className="site-label">Kontrol Data</p>
+          <h2 className="site-title mt-2 text-2xl text-[hsl(var(--foreground))] md:text-3xl">Admin Presensi</h2>
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
             Filter presensi berdasarkan tanggal dan pencarian nama.
           </p>
+
           <div className="mt-4 flex flex-wrap gap-2 md:justify-end">
             <Button variant="outline" size="sm" onClick={handleDownloadAttendance}>
               Unduh Presensi (Excel)
@@ -288,13 +285,12 @@ export default function AdminPage() {
               Unduh Leaderboard (Excel)
             </Button>
           </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-[200px_1fr_auto]">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">
-                Rentang
-              </label>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-[210px_minmax(0,1fr)_150px]">
+            <div className="space-y-2">
+              <label className="site-label">Rentang</label>
               <select
-                className="rounded-[var(--radius)] border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm"
+                className="site-select w-full"
                 value={range}
                 onChange={(e) => setRange(e.target.value as typeof range)}
               >
@@ -307,16 +303,16 @@ export default function AdminPage() {
                 <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
               )}
             </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">
-                Cari Nama
-              </label>
+
+            <div className="space-y-2">
+              <label className="site-label">Cari Nama</label>
               <Input
                 placeholder="Masukkan nama..."
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
             </div>
+
             <div className="flex items-end">
               <Button variant="secondary" onClick={fetchAttendance} disabled={loading} className="w-full">
                 {loading ? "Memuat..." : "Terapkan"}
@@ -325,49 +321,39 @@ export default function AdminPage() {
           </div>
         </section>
 
-        <section className="mt-8 rounded-[calc(var(--radius)+6px)] border border-[hsl(var(--border))] bg-white/70 p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="font-[var(--font-display)] text-xl text-[hsl(var(--foreground))]">
-              Daftar Presensi
-            </h3>
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">
-              Total: {data.length}
-            </span>
+        <section className="site-soft-card mt-7 p-5 md:p-6">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">Daftar Presensi</h3>
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">Total: {data.length}</span>
           </div>
+
           <div className="mt-4 space-y-3">
             {data.length === 0 ? (
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                Belum ada data untuk tanggal ini.
-              </p>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">Belum ada data untuk tanggal ini.</p>
             ) : (
               data.map((row) => (
                 <div
                   key={row.id}
-                  className="flex flex-col gap-2 rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 md:flex-row md:items-center md:justify-between"
+                  className="site-card-list-row flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between"
                 >
                   <div>
-                    <p className="font-semibold">{row.participant.name}</p>
+                    <p className="font-semibold text-[hsl(var(--foreground))]">{row.participant.name}</p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                      {row.participant.address ?? "Alamat tidak tersedia"} -{" "}
-                      {row.participant.gender ?? "N/A"}
+                      {row.participant.address ?? "Alamat tidak tersedia"} - {row.participant.gender ?? "N/A"}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end gap-1 text-right text-xs text-[hsl(var(--muted-foreground))]">
+
+                  <div className="flex flex-col gap-1 text-right text-xs text-[hsl(var(--muted-foreground))] md:items-end">
                     <div>{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</div>
-                    <div className="truncate">Device: {row.deviceId ?? "-"}</div>
-                    <div className="flex gap-1 text-[hsl(var(--foreground))]">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="gap-1"
-                        onClick={() => openEditAttendance(row)}
-                      >
+                    <div className="max-w-[220px] truncate">Device: {row.deviceId ?? "-"}</div>
+                    <div className="flex flex-wrap justify-end gap-1 text-[hsl(var(--foreground))]">
+                      <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditAttendance(row)}>
                         <PenLine size={14} /> Edit
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="gap-1 text-red-700 hover:text-red-800"
+                        className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
                         onClick={() => deleteAttendance(row)}
                         disabled={deleteAttendanceId === row.id}
                       >
@@ -382,17 +368,14 @@ export default function AdminPage() {
           </div>
         </section>
 
-        <section className="mt-8 rounded-[calc(var(--radius)+6px)] border border-[hsl(var(--border))] bg-white/70 p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="font-[var(--font-display)] text-xl text-[hsl(var(--foreground))]">
-              Daftar Peserta
-            </h3>
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">
-              Total: {participantTotal}
-            </span>
+        <section className="site-soft-card mt-7 p-5 md:p-6">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">Daftar Peserta</h3>
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">Total: {participantTotal}</span>
           </div>
-          <div className="mt-4 flex flex-col gap-3">
-            <div className="flex flex-wrap gap-3 md:flex-row md:items-center">
+
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
               <Input
                 placeholder="Cari peserta..."
                 value={participantSearch}
@@ -413,6 +396,7 @@ export default function AdminPage() {
                 {participantsOpen ? "Sembunyikan" : "Tampilkan"} daftar
               </Button>
             </div>
+
             {participantsOpen && (
               <div className="space-y-2">
                 {participants.length === 0 ? (
@@ -423,27 +407,23 @@ export default function AdminPage() {
                   participants.map((p) => (
                     <div
                       key={p.id}
-                      className="flex flex-col gap-1 rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 md:flex-row md:items-center md:justify-between"
+                      className="site-card-list-row flex flex-col gap-1 px-4 py-3 md:flex-row md:items-center md:justify-between"
                     >
                       <div>
-                        <p className="font-semibold">{p.name}</p>
+                        <p className="font-semibold text-[hsl(var(--foreground))]">{p.name}</p>
                         <p className="text-xs text-[hsl(var(--muted-foreground))]">
                           {p.address ?? "Alamat tidak tersedia"} - {p.gender ?? "N/A"}
                         </p>
                       </div>
-                      <div className="flex gap-1 text-[hsl(var(--foreground))]">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="gap-1"
-                          onClick={() => openEditParticipant(p)}
-                        >
+
+                      <div className="flex flex-wrap gap-1 text-[hsl(var(--foreground))]">
+                        <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditParticipant(p)}>
                           <PenLine size={14} /> Edit
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="gap-1 text-red-700 hover:text-red-800"
+                          className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
                           onClick={() => deleteParticipant(p)}
                           disabled={deleteParticipantId === p.id}
                         >
@@ -458,7 +438,7 @@ export default function AdminPage() {
             )}
           </div>
         </section>
-      </main>
+      </SiteShell>
 
       <Dialog
         open={editAttendanceOpen}
@@ -478,18 +458,14 @@ export default function AdminPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 space-y-3">
-            <label className="block text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">
-              Peserta
-            </label>
+            <label className="site-label block">Peserta</label>
             <ParticipantCombobox
               value={editAttendanceParticipant ?? undefined}
               onSelect={(p) => setEditAttendanceParticipant(p)}
               onCreateNew={() => {}}
             />
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">
-                Tanggal Presensi
-              </label>
+            <div className="space-y-2">
+              <label className="site-label block">Tanggal Presensi</label>
               <Input
                 type="date"
                 value={editAttendanceDate}
@@ -523,26 +499,20 @@ export default function AdminPage() {
             <DialogDescription>Perbaiki nama/alamat/jenis kelamin peserta.</DialogDescription>
           </DialogHeader>
           <div className="mt-4 space-y-3">
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">
-                Nama
-              </label>
+            <div className="space-y-2">
+              <label className="site-label block">Nama</label>
               <Input value={editParticipantName} onChange={(e) => setEditParticipantName(e.target.value)} />
             </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">
-                Alamat
-              </label>
+            <div className="space-y-2">
+              <label className="site-label block">Alamat</label>
               <Input
                 value={editParticipantAddress}
                 onChange={(e) => setEditParticipantAddress(e.target.value)}
                 placeholder="Opsional"
               />
             </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))]">
-                Jenis Kelamin (L/P)
-              </label>
+            <div className="space-y-2">
+              <label className="site-label block">Jenis Kelamin (L/P)</label>
               <Input
                 value={editParticipantGender}
                 onChange={(e) => {
@@ -570,3 +540,4 @@ export default function AdminPage() {
     </PinGate>
   );
 }
+

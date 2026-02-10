@@ -4,21 +4,23 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] disabled:pointer-events-none disabled:opacity-60",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[calc(var(--radius)+2px)] border border-transparent text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--background))] disabled:pointer-events-none disabled:opacity-60",
   {
     variants: {
       variant: {
-        default: "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90",
+        default:
+          "bg-[linear-gradient(160deg,hsl(var(--primary)),hsl(var(--primary-strong)))] text-[hsl(var(--primary-foreground))] shadow-[0_16px_26px_-18px_hsl(var(--primary)/0.95)] hover:brightness-95",
         outline:
-          "border border-[hsl(var(--border))] bg-transparent text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]",
-        ghost: "bg-transparent hover:bg-[hsl(var(--muted))]",
+          "border-[hsl(var(--border-strong))] bg-[hsl(var(--card))/0.82] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))/0.78]",
+        ghost:
+          "border-transparent bg-transparent text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))/0.72] hover:text-[hsl(var(--foreground))]",
         secondary:
-          "bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))] hover:opacity-90",
+          "border-[hsl(var(--accent))/0.35] bg-[hsl(var(--accent))/0.2] text-[hsl(var(--accent-foreground))] hover:bg-[hsl(var(--accent))/0.28]",
       },
       size: {
-        default: "h-10 px-4",
-        sm: "h-9 px-3",
-        lg: "h-12 px-5 text-base",
+        default: "h-11 px-4",
+        sm: "h-9 px-3 text-xs",
+        lg: "h-12 px-6 text-base",
       },
     },
     defaultVariants: {

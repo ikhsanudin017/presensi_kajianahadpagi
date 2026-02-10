@@ -1,0 +1,17 @@
+﻿<svg width="220" height="420" viewBox="0 0 220 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(220 0) scale(-1 1)" stroke="#C9A24A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M110 8V74" />
+    <path d="M96 74H124" />
+    <path d="M82 98C82 84 93 74 107 74H113C127 74 138 84 138 98V112H82V98Z" />
+    <path d="M70 112H150" />
+    <path d="M70 112V154C70 176 88 194 110 194C132 194 150 176 150 154V112" />
+    <path d="M90 112V166" />
+    <path d="M110 112V182" />
+    <path d="M130 112V166" />
+    <path d="M70 154H150" />
+    <path d="M90 194L82 226H138L130 194" />
+    <path d="M96 226H124" />
+    <path d="M64 112C52 126 52 158 64 172" opacity="0.55" />
+    <path d="M156 112C168 126 168 158 156 172" opacity="0.55" />
+  </g>
+</svg>

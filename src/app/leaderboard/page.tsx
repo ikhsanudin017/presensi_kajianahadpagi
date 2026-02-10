@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import * as React from "react";
-import { SiteHeader } from "@/components/site-header";
+import { SiteShell } from "@/components/site/SiteShell";
 import { Button } from "@/components/ui/button";
 import { safeJson } from "@/lib/http";
 
@@ -29,6 +29,7 @@ type AbsentMeta = {
   sessions: number;
   sessionDates: string[];
 };
+
 const ranges = [
   { label: "30 hari terakhir", value: "30d", weeks: 4 },
   { label: "3 bulan terakhir", value: "90d", weeks: 12 },
@@ -44,11 +45,12 @@ export default function LeaderboardPage() {
   const [loadingTotal, setLoadingTotal] = React.useState(false);
   const [loadingStreak, setLoadingStreak] = React.useState(false);
   const [loadingAbsent, setLoadingAbsent] = React.useState(false);
+
   const motivasiList = [
     "“Langkah kecil menuju majelis ilmu adalah jejak besar menuju ridha Allah.”",
     "“Hati yang diisi ilmu lebih tenang menghadapi lelahnya pekan.”",
     "“Setiap Ahad adalah kesempatan baru untuk memperbaiki diri.”",
-    "“Datanglah, walau sebentar; Allah melihat kesungguhan hamba-Nya.”"
+    "“Datanglah, walau sebentar; Allah melihat kesungguhan hamba-Nya.”",
   ];
 
   const fetchTotal = React.useCallback(async () => {
@@ -115,156 +117,146 @@ export default function LeaderboardPage() {
   }, [fetchAbsent]);
 
   return (
-    <>
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-5xl px-6 pb-16 pt-10">
-        <section className="glass rounded-[calc(var(--radius)+6px)] p-6 shadow-lg">
-          <h2 className="font-[var(--font-display)] text-2xl text-[hsl(var(--foreground))]">
-            Leaderboard Paling Rajin
-          </h2>
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-            Rekap kehadiran dan streak kajian Ahad pagi.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            {ranges.map((item) => (
-              <Button
-                key={item.value}
-                variant={range === item.value ? "default" : "outline"}
-                size="sm"
-                onClick={() => setRange(item.value)}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </div>
-        </section>
+    <SiteShell>
+      <section className="site-main-card p-5 md:p-6">
+        <p className="site-label">Ringkasan Kehadiran</p>
+        <h2 className="site-title mt-2 text-2xl text-[hsl(var(--foreground))] md:text-3xl">
+          Leaderboard Paling Rajin
+        </h2>
+        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+          Rekap kehadiran dan streak kajian Ahad pagi.
+        </p>
 
-        <section className="mt-8 grid gap-6 md:grid-cols-2">
-          <div className="rounded-[calc(var(--radius)+6px)] border border-[hsl(var(--border))] bg-white/70 p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="font-[var(--font-display)] text-xl text-[hsl(var(--foreground))]">
-                Top Total Hadir
-              </h3>
-              <Button variant="ghost" size="sm" onClick={fetchTotal} disabled={loadingTotal}>
-                Refresh
-              </Button>
-            </div>
-            <div className="mt-4 space-y-3">
-              {total.length === 0 ? (
-                <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  {loadingTotal ? "Memuat..." : "Belum ada data."}
-                </p>
-              ) : (
-                total.map((row, index) => (
-                  <div
-                    key={row.participantId}
-                    className="flex items-center justify-between rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
-                        #{index + 1}
-                      </p>
-                      <p className="font-semibold">{row.name}</p>
-                    </div>
-                    <span className="rounded-full bg-[hsl(var(--muted))] px-3 py-1 text-xs font-semibold text-[hsl(var(--foreground))]">
-                      {row.total} hadir
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {ranges.map((item) => (
+            <Button
+              key={item.value}
+              variant={range === item.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => setRange(item.value)}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </div>
+      </section>
 
-          <div className="rounded-[calc(var(--radius)+6px)] border border-[hsl(var(--border))] bg-white/70 p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="font-[var(--font-display)] text-xl text-[hsl(var(--foreground))]">
-                Top Best Streak
-              </h3>
-              <Button variant="ghost" size="sm" onClick={fetchStreak} disabled={loadingStreak}>
-                Refresh
-              </Button>
-            </div>
-            <div className="mt-4 space-y-3">
-              {streak.length === 0 ? (
-                <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  {loadingStreak ? "Memuat..." : "Belum ada data."}
-                </p>
-              ) : (
-                streak.map((row, index) => (
-                  <div
-                    key={row.participantId}
-                    className="flex items-center justify-between rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
-                        #{index + 1}
-                      </p>
-                      <p className="font-semibold">{row.name}</p>
-                    </div>
-                    <div className="text-right text-xs text-[hsl(var(--muted-foreground))]">
-                      <div>Best: {row.bestStreak}</div>
-                      <div>Current: {row.currentStreak}</div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-8 rounded-[calc(var(--radius)+6px)] border border-[hsl(var(--border))] bg-white/70 p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-[var(--font-display)] text-xl text-[hsl(var(--foreground))]">
-                Perlu Semangat Lagi
-              </h3>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                Peserta yang tercatat tidak hadir pada sesi kajian yang benar-benar berlangsung di rentang ini.
-              </p>
-            </div>
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">
-              Rentang: {ranges.find((r) => r.value === range)?.label}
-              {absentMeta ? ` · ${absentMeta.sessions} sesi` : null}
-            </span>
+      <section className="mt-7 grid gap-6 md:grid-cols-2">
+        <div className="site-soft-card p-5 md:p-6">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">
+              Top Total Hadir
+            </h3>
+            <Button variant="ghost" size="sm" onClick={fetchTotal} disabled={loadingTotal}>
+              Refresh
+            </Button>
           </div>
 
           <div className="mt-4 space-y-3">
-            {absent.length === 0 ? (
+            {total.length === 0 ? (
               <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                {loadingAbsent
-                  ? "Memuat..."
-                  : absentMeta && absentMeta.sessions === 0
-                    ? "Belum ada sesi kajian pada rentang ini."
-                    : "Belum ada data absen pada rentang ini."}
+                {loadingTotal ? "Memuat..." : "Belum ada data."}
               </p>
             ) : (
-              absent.map((row, idx) => (
+              total.map((row, index) => (
                 <div
                   key={row.participantId}
-                  className="flex items-center justify-between rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3"
+                  className="site-card-list-row flex items-center justify-between px-4 py-3"
                 >
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-[hsl(var(--muted-foreground))]">
-                      #{idx + 1} paling jarang hadir
-                    </p>
-                    <p className="font-semibold">{row.name}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                      Hadir {row.attended}x · Tidak hadir {row.absent}x (sesi kajian)
-                    </p>
+                    <p className="site-label">#{index + 1}</p>
+                    <p className="font-semibold text-[hsl(var(--foreground))]">{row.name}</p>
+                  </div>
+                  <span className="site-chip">{row.total} hadir</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="site-soft-card p-5 md:p-6">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">
+              Top Best Streak
+            </h3>
+            <Button variant="ghost" size="sm" onClick={fetchStreak} disabled={loadingStreak}>
+              Refresh
+            </Button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {streak.length === 0 ? (
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                {loadingStreak ? "Memuat..." : "Belum ada data."}
+              </p>
+            ) : (
+              streak.map((row, index) => (
+                <div
+                  key={row.participantId}
+                  className="site-card-list-row flex items-center justify-between px-4 py-3"
+                >
+                  <div>
+                    <p className="site-label">#{index + 1}</p>
+                    <p className="font-semibold text-[hsl(var(--foreground))]">{row.name}</p>
                   </div>
                   <div className="text-right text-xs text-[hsl(var(--muted-foreground))]">
-                    <div className="rounded-full bg-[hsl(var(--accent))/0.15] px-3 py-1 text-[11px] font-semibold text-[hsl(var(--accent-foreground))]">
-                      {motivasiList[idx % motivasiList.length]}
-                    </div>
+                    <div>Best: {row.bestStreak}</div>
+                    <div>Current: {row.currentStreak}</div>
                   </div>
                 </div>
               ))
             )}
           </div>
-        </section>
+        </div>
+      </section>
 
-      </main>
-    </>
+      <section className="site-soft-card mt-7 p-5 md:p-6">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">
+              Perlu Semangat Lagi
+            </h3>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              Peserta yang tercatat tidak hadir pada sesi kajian yang benar-benar berlangsung di rentang ini.
+            </p>
+          </div>
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">
+            Rentang: {ranges.find((r) => r.value === range)?.label}
+            {absentMeta ? ` · ${absentMeta.sessions} sesi` : null}
+          </span>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {absent.length === 0 ? (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              {loadingAbsent
+                ? "Memuat..."
+                : absentMeta && absentMeta.sessions === 0
+                  ? "Belum ada sesi kajian pada rentang ini."
+                  : "Belum ada data absen pada rentang ini."}
+            </p>
+          ) : (
+            absent.map((row, idx) => (
+              <div
+                key={row.participantId}
+                className="site-card-list-row flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between"
+              >
+                <div>
+                  <p className="site-label">#{idx + 1} paling jarang hadir</p>
+                  <p className="font-semibold text-[hsl(var(--foreground))]">{row.name}</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Hadir {row.attended}x · Tidak hadir {row.absent}x (sesi kajian)
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--accent))/0.14] px-3 py-2 text-xs font-medium text-[hsl(var(--accent-foreground))] md:max-w-[300px]">
+                  {motivasiList[idx % motivasiList.length]}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </SiteShell>
   );
 }
 
