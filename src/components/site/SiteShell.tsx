@@ -28,24 +28,24 @@ export function SiteShell({ children }: { children: ReactNode }) {
 
       <div className="relative z-10 pb-16 pt-4 md:pt-8">
         <header className="site-container">
-          <div className="site-main-card relative overflow-hidden px-5 py-6 md:px-8 md:py-8">
+          <div className="site-main-card relative overflow-hidden px-4 py-5 sm:px-5 sm:py-6 md:px-8 md:py-8">
             <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--accent))/0.65] to-transparent" />
             <div className="absolute inset-x-12 bottom-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--primary))/0.48] to-transparent" />
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-3">
                 <p className="site-eyebrow">KAJIAN AHAD PAGI</p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="site-title text-3xl text-[hsl(var(--foreground))] md:text-[3.15rem]">
+                <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                  <h1 className="site-title text-[clamp(2rem,7vw,3.15rem)] text-[hsl(var(--foreground))]">
                     Masjid Al Irsyad
                   </h1>
                   <span className="site-badge">Sawit</span>
                 </div>
-                <p className="max-w-xl text-sm text-[hsl(var(--muted-foreground))] md:text-[0.95rem]">
+                <p className="max-w-xl text-sm leading-relaxed text-[hsl(var(--muted-foreground))] md:text-[0.95rem]">
                   Presensi jamaah kajian dengan nuansa islami yang hangat, bersih, dan mudah digunakan.
                 </p>
               </div>
 
-              <nav className="site-nav" aria-label="Navigasi halaman">
+              <nav className="site-nav w-full sm:w-auto" aria-label="Navigasi halaman">
                 {navItems.map((item) => {
                   const active = isActivePath(pathname, item.href);
                   return (

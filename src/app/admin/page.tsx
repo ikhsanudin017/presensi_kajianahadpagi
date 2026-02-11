@@ -278,10 +278,10 @@ export default function AdminPage() {
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2 md:justify-end">
-            <Button variant="outline" size="sm" onClick={handleDownloadAttendance}>
+            <Button variant="outline" size="sm" onClick={handleDownloadAttendance} className="w-full sm:w-auto">
               Unduh Presensi (Excel)
             </Button>
-            <Button variant="outline" size="sm" onClick={handleDownloadLeaderboard}>
+            <Button variant="outline" size="sm" onClick={handleDownloadLeaderboard} className="w-full sm:w-auto">
               Unduh Leaderboard (Excel)
             </Button>
           </div>
@@ -334,19 +334,19 @@ export default function AdminPage() {
               data.map((row) => (
                 <div
                   key={row.id}
-                  className="site-card-list-row flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between"
+                  className="site-card-list-row flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-semibold text-[hsl(var(--foreground))]">{row.participant.name}</p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))]">
                       {row.participant.address ?? "Alamat tidak tersedia"} - {row.participant.gender ?? "N/A"}
                     </p>
                   </div>
 
-                  <div className="flex flex-col gap-1 text-right text-xs text-[hsl(var(--muted-foreground))] md:items-end">
+                  <div className="flex flex-col gap-1 text-left text-xs text-[hsl(var(--muted-foreground))] sm:items-end sm:text-right">
                     <div>{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</div>
                     <div className="max-w-[220px] truncate">Device: {row.deviceId ?? "-"}</div>
-                    <div className="flex flex-wrap justify-end gap-1 text-[hsl(var(--foreground))]">
+                    <div className="flex flex-wrap gap-1 text-[hsl(var(--foreground))] sm:justify-end">
                       <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditAttendance(row)}>
                         <PenLine size={14} /> Edit
                       </Button>
@@ -381,13 +381,18 @@ export default function AdminPage() {
                 value={participantSearch}
                 onChange={(e) => setParticipantSearch(e.target.value)}
               />
-              <Button variant="secondary" onClick={fetchParticipants} disabled={participantLoading}>
+              <Button
+                variant="secondary"
+                onClick={fetchParticipants}
+                disabled={participantLoading}
+                className="w-full md:w-auto"
+              >
                 {participantLoading ? "Memuat..." : "Cari / Muat"}
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setParticipantsOpen((v) => !v)}
-                className="flex items-center gap-2"
+                className="flex w-full items-center justify-center gap-2 md:w-auto"
               >
                 <ChevronDown
                   size={16}
@@ -407,16 +412,16 @@ export default function AdminPage() {
                   participants.map((p) => (
                     <div
                       key={p.id}
-                      className="site-card-list-row flex flex-col gap-1 px-4 py-3 md:flex-row md:items-center md:justify-between"
+                      className="site-card-list-row flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-semibold text-[hsl(var(--foreground))]">{p.name}</p>
                         <p className="text-xs text-[hsl(var(--muted-foreground))]">
                           {p.address ?? "Alamat tidak tersedia"} - {p.gender ?? "N/A"}
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap gap-1 text-[hsl(var(--foreground))]">
+                      <div className="flex flex-wrap gap-1 text-[hsl(var(--foreground))] sm:justify-end">
                         <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditParticipant(p)}>
                           <PenLine size={14} /> Edit
                         </Button>

@@ -161,11 +161,11 @@ export default function LeaderboardPage() {
               total.map((row, index) => (
                 <div
                   key={row.participantId}
-                  className="site-card-list-row flex items-center justify-between px-4 py-3"
+                  className="site-card-list-row flex flex-col items-start gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="site-label">#{index + 1}</p>
-                    <p className="font-semibold text-[hsl(var(--foreground))]">{row.name}</p>
+                    <p className="break-words font-semibold text-[hsl(var(--foreground))]">{row.name}</p>
                   </div>
                   <span className="site-chip">{row.total} hadir</span>
                 </div>
@@ -193,13 +193,13 @@ export default function LeaderboardPage() {
               streak.map((row, index) => (
                 <div
                   key={row.participantId}
-                  className="site-card-list-row flex items-center justify-between px-4 py-3"
+                  className="site-card-list-row flex flex-col items-start gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="site-label">#{index + 1}</p>
-                    <p className="font-semibold text-[hsl(var(--foreground))]">{row.name}</p>
+                    <p className="break-words font-semibold text-[hsl(var(--foreground))]">{row.name}</p>
                   </div>
-                  <div className="text-right text-xs text-[hsl(var(--muted-foreground))]">
+                  <div className="text-left text-xs text-[hsl(var(--muted-foreground))] sm:text-right">
                     <div>Best: {row.bestStreak}</div>
                     <div>Current: {row.currentStreak}</div>
                   </div>
@@ -239,16 +239,16 @@ export default function LeaderboardPage() {
             absent.map((row, idx) => (
               <div
                 key={row.participantId}
-                className="site-card-list-row flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between"
+                className="site-card-list-row flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div>
+                <div className="min-w-0">
                   <p className="site-label">#{idx + 1} paling jarang hadir</p>
-                  <p className="font-semibold text-[hsl(var(--foreground))]">{row.name}</p>
+                  <p className="break-words font-semibold text-[hsl(var(--foreground))]">{row.name}</p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
                     Hadir {row.attended}x · Tidak hadir {row.absent}x (sesi kajian)
                   </p>
                 </div>
-                <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--accent))/0.14] px-3 py-2 text-xs font-medium text-[hsl(var(--accent-foreground))] md:max-w-[300px]">
+                <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--accent))/0.14] px-3 py-2 text-xs font-medium text-[hsl(var(--accent-foreground))] sm:max-w-[300px]">
                   {motivasiList[idx % motivasiList.length]}
                 </div>
               </div>

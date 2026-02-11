@@ -57,6 +57,12 @@ body {
   min-height: 100vh;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 ::selection {
   background: hsl(var(--primary) / 0.22);
   color: hsl(var(--foreground));
@@ -77,6 +83,39 @@ body {
 @media (max-width: 640px) {
   .site-container {
     width: calc(100% - 1.5rem);
+  }
+}
+
+@media (max-width: 480px) {
+  .site-main-card {
+    border-radius: 1.3rem;
+  }
+
+  .site-soft-card {
+    border-radius: 1.2rem;
+  }
+
+  .site-nav {
+    width: 100%;
+    justify-content: space-between;
+    border-radius: 1rem;
+    padding: 0.25rem;
+    gap: 0.25rem;
+  }
+
+  .site-nav-link {
+    flex: 1 1 0;
+    text-align: center;
+    font-size: 0.74rem;
+    padding: 0.5rem 0.45rem;
+  }
+
+  .site-eyebrow {
+    letter-spacing: 0.25em;
+  }
+
+  .site-label {
+    letter-spacing: 0.16em;
   }
 }
 

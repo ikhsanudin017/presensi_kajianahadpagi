@@ -4,7 +4,6 @@ import * as React from "react";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
-import Image from "next/image";
 import { Trash2 } from "lucide-react";
 import { ParticipantCombobox, type Participant } from "@/components/participant-combobox";
 import { AddParticipantDialog } from "@/components/add-participant-dialog";
@@ -132,17 +131,7 @@ export default function HomePage() {
     <PinGate>
       <SiteShell>
         <section className="site-main-card relative overflow-hidden p-5 md:p-8">
-          <div className="pointer-events-none absolute inset-0">
-            <Image
-              src="/assets/card-mosque-watermark.png"
-              alt=""
-              fill
-              sizes="(max-width: 768px) 100vw, 980px"
-              className="object-cover opacity-20"
-            />
-          </div>
-
-          <div className="relative z-10">
+          <div>
             <div className="space-y-2">
               <p className="site-label">Form Presensi</p>
               <h2 className="site-title text-2xl text-[hsl(var(--foreground))] md:text-3xl">
@@ -161,7 +150,7 @@ export default function HomePage() {
                     type="date"
                     value={sessionDate}
                     onChange={(e) => setSessionDate(e.target.value)}
-                    className="md:max-w-[340px]"
+                    className="w-full sm:max-w-[340px]"
                   />
                 </div>
 
@@ -182,7 +171,7 @@ export default function HomePage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full justify-center md:max-w-[340px]"
+                  className="w-full justify-center sm:max-w-[340px]"
                   onClick={() => setComboOpen(true)}
                 >
                   Cari
@@ -225,9 +214,9 @@ export default function HomePage() {
               attendance.map((item) => (
                 <div
                   key={item.id}
-                  className="site-card-list-row flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between"
+                  className="site-card-list-row flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-semibold text-[hsl(var(--foreground))]">{item.participant.name}</p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))]">
                       {dayjs(item.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB
