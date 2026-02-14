@@ -9,7 +9,7 @@ const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     className={cn(
-      "flex h-full w-full flex-col overflow-hidden rounded-[calc(var(--radius)+4px)] bg-[hsl(var(--card))/0.96] text-[hsl(var(--foreground))]",
+      "flex h-full w-full flex-col overflow-hidden rounded-[calc(var(--radius)+6px)] bg-[hsl(var(--card))] text-[hsl(var(--foreground))]",
       className
     )}
     {...props}
@@ -21,11 +21,11 @@ const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => (
-  <div className="flex items-center border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))/0.44] px-3">
+  <div className="sticky top-0 z-10 flex items-center border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 backdrop-blur-sm">
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]",
+        "flex h-11 w-full bg-transparent py-3 text-base outline-none placeholder:text-[hsl(var(--muted-foreground))]",
         className
       )}
       {...props}
@@ -40,7 +40,7 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn("max-h-64 overflow-y-auto", className)}
+    className={cn("max-h-72 overflow-y-auto", className)}
     {...props}
   />
 ));
@@ -64,7 +64,7 @@ const CommandGroup = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.Group
     ref={ref}
-    className={cn("p-1 text-[hsl(var(--foreground))]", className)}
+    className={cn("p-2 text-[hsl(var(--foreground))]", className)}
     {...props}
   />
 ));
@@ -77,7 +77,7 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "flex cursor-pointer select-none items-center gap-2 rounded-[calc(var(--radius)-2px)] px-2 py-2 text-sm aria-selected:bg-[hsl(var(--muted))/0.82] aria-selected:text-[hsl(var(--foreground))]",
+      "flex cursor-pointer select-none items-center gap-2 rounded-[calc(var(--radius)-2px)] px-3 py-2.5 text-sm aria-selected:bg-[hsl(var(--muted))/0.82] aria-selected:text-[hsl(var(--foreground))]",
       className
     )}
     {...props}

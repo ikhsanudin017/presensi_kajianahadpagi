@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
@@ -72,35 +72,34 @@ export function AddParticipantDialog({ open, initialName, onOpenChange, onCreate
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Tambah Peserta Baru</DialogTitle>
-          <DialogDescription>Lengkapi data peserta jika tersedia.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Nama</Label>
-            <Input id="name" value={name} onChange={(event) => setName(event.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="address">Alamat</Label>
-            <Input id="address" value={address} onChange={(event) => setAddress(event.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="gender">Gender (L/P)</Label>
-            <Input
-              id="gender"
-              value={gender}
-              maxLength={1}
-              onChange={(event) => setGender(event.target.value.toUpperCase() as "L" | "P" | "")}
-            />
-          </div>
-          <Button className="w-full" onClick={submit} disabled={loading}>
-            {loading ? "Menyimpan..." : "Simpan"}
-          </Button>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Tambah Peserta Baru"
+      description="Lengkapi data peserta jika tersedia."
+    >
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Nama</Label>
+          <Input id="name" value={name} onChange={(event) => setName(event.target.value)} />
         </div>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-2">
+          <Label htmlFor="address">Alamat</Label>
+          <Input id="address" value={address} onChange={(event) => setAddress(event.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="gender">Gender (L/P)</Label>
+          <Input
+            id="gender"
+            value={gender}
+            maxLength={1}
+            onChange={(event) => setGender(event.target.value.toUpperCase() as "L" | "P" | "")}
+          />
+        </div>
+        <Button className="w-full" onClick={submit} disabled={loading}>
+          {loading ? "Menyimpan..." : "Simpan"}
+        </Button>
+      </div>
+    </ResponsiveDialog>
   );
 }

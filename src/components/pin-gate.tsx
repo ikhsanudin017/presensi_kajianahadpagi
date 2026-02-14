@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { safeJson } from "@/lib/http";
 
@@ -66,27 +66,25 @@ export function PinGate({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      <Dialog open={open}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Masukkan PIN</DialogTitle>
-            <DialogDescription>
-              Untuk mencegah input iseng. PIN hanya diminta sekali per device.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 space-y-3">
-            <Input
-              type="password"
-              placeholder="PIN"
-              value={pin}
-              onChange={(event) => setPin(event.target.value)}
-            />
-            <Button onClick={handleSubmit} disabled={loading || pin.length === 0} className="w-full">
-              {loading ? "Memeriksa..." : "Masuk"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={() => {}}
+        title="Masukkan PIN"
+        description="Untuk mencegah input iseng. PIN hanya diminta sekali per device."
+        hideCloseButton
+      >
+        <div className="space-y-3">
+          <Input
+            type="password"
+            placeholder="PIN"
+            value={pin}
+            onChange={(event) => setPin(event.target.value)}
+          />
+          <Button onClick={handleSubmit} disabled={loading || pin.length === 0} className="w-full">
+            {loading ? "Memeriksa..." : "Masuk"}
+          </Button>
+        </div>
+      </ResponsiveDialog>
     </>
   );
 }

@@ -5,17 +5,12 @@ import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
 import { PenLine, Trash2, ChevronDown } from "lucide-react";
+import { PageShell } from "@/components/layout/PageShell";
 import { PinGate } from "@/components/pin-gate";
 import { SiteShell } from "@/components/site/SiteShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { ParticipantCombobox, type Participant } from "@/components/participant-combobox";
 import { useToast } from "@/components/ui/use-toast";
 import { safeJson } from "@/lib/http";
@@ -270,23 +265,22 @@ export default function AdminPage() {
   return (
     <PinGate>
       <SiteShell>
-        <section className="site-main-card p-5 md:p-6">
-          <p className="site-label">Kontrol Data</p>
-          <h2 className="site-title mt-2 text-2xl text-[hsl(var(--foreground))] md:text-3xl">Admin Presensi</h2>
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-            Filter presensi berdasarkan tanggal dan pencarian nama.
-          </p>
-
-          <div className="mt-4 flex flex-wrap gap-2 md:justify-end">
-            <Button variant="outline" size="sm" onClick={handleDownloadAttendance} className="w-full sm:w-auto">
-              Unduh Presensi (Excel)
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleDownloadLeaderboard} className="w-full sm:w-auto">
-              Unduh Leaderboard (Excel)
-            </Button>
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-[210px_minmax(0,1fr)_150px]">
+        <PageShell
+          eyebrow="Kontrol Data"
+          title="Admin Presensi"
+          description="Filter presensi berdasarkan tanggal dan pencarian nama."
+          actions={
+            <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto md:justify-end">
+              <Button variant="outline" size="sm" onClick={handleDownloadAttendance} className="w-full sm:w-auto">
+                Unduh Presensi (Excel)
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDownloadLeaderboard} className="w-full sm:w-auto">
+                Unduh Leaderboard (Excel)
+              </Button>
+            </div>
+          }
+        >
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[220px_minmax(0,1fr)_180px]">
             <div className="space-y-2">
               <label className="site-label">Rentang</label>
               <select
@@ -299,9 +293,9 @@ export default function AdminPage() {
                 <option value="year">Tahun ini</option>
                 <option value="all">Semua</option>
               </select>
-              {range === "single" && (
+              {range === "single" ? (
                 <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-              )}
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -319,7 +313,7 @@ export default function AdminPage() {
               </Button>
             </div>
           </div>
-        </section>
+        </PageShell>
 
         <section className="site-soft-card mt-7 p-5 md:p-6">
           <div className="flex items-center justify-between gap-2">
@@ -327,44 +321,86 @@ export default function AdminPage() {
             <span className="text-xs text-[hsl(var(--muted-foreground))]">Total: {data.length}</span>
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 md:hidden space-y-3">
             {data.length === 0 ? (
               <p className="text-sm text-[hsl(var(--muted-foreground))]">Belum ada data untuk tanggal ini.</p>
             ) : (
               data.map((row) => (
-                <div
-                  key={row.id}
-                  className="site-card-list-row flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                >
+                <div key={row.id} className="site-card-list-row space-y-2 px-4 py-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-[hsl(var(--foreground))]">{row.participant.name}</p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))]">
                       {row.participant.address ?? "Alamat tidak tersedia"} - {row.participant.gender ?? "N/A"}
                     </p>
                   </div>
-
-                  <div className="flex flex-col gap-1 text-left text-xs text-[hsl(var(--muted-foreground))] sm:items-end sm:text-right">
-                    <div>{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</div>
-                    <div className="max-w-[220px] truncate">Device: {row.deviceId ?? "-"}</div>
-                    <div className="flex flex-wrap gap-1 text-[hsl(var(--foreground))] sm:justify-end">
-                      <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditAttendance(row)}>
-                        <PenLine size={14} /> Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
-                        onClick={() => deleteAttendance(row)}
-                        disabled={deleteAttendanceId === row.id}
-                      >
-                        <Trash2 size={14} />
-                        {deleteAttendanceId === row.id ? "Menghapus..." : "Hapus"}
-                      </Button>
-                    </div>
+                  <div className="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+                    <span>{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</span>
+                    <span className="max-w-[46vw] truncate">Device: {row.deviceId ?? "-"}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditAttendance(row)}>
+                      <PenLine size={14} /> Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
+                      onClick={() => deleteAttendance(row)}
+                      disabled={deleteAttendanceId === row.id}
+                    >
+                      <Trash2 size={14} />
+                      {deleteAttendanceId === row.id ? "Menghapus..." : "Hapus"}
+                    </Button>
                   </div>
                 </div>
               ))
             )}
+          </div>
+
+          <div className="mt-4 hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead>
+                <tr className="border-b border-[hsl(var(--border))] text-left text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--muted-foreground))]">
+                  <th className="py-2 pr-2">Peserta</th>
+                  <th className="py-2 pr-2">Alamat / Gender</th>
+                  <th className="py-2 pr-2">Waktu</th>
+                  <th className="py-2 pr-2">Device</th>
+                  <th className="py-2 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((row) => (
+                  <tr key={row.id} className="border-b border-[hsl(var(--border))/0.7] last:border-b-0">
+                    <td className="py-3 pr-2 font-semibold">{row.participant.name}</td>
+                    <td className="py-3 pr-2 text-[hsl(var(--muted-foreground))]">
+                      {(row.participant.address ?? "Alamat tidak tersedia") + " - " + (row.participant.gender ?? "N/A")}
+                    </td>
+                    <td className="py-3 pr-2">{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</td>
+                    <td className="max-w-[220px] truncate py-3 pr-2 text-[hsl(var(--muted-foreground))]">{row.deviceId ?? "-"}</td>
+                    <td className="py-3 text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditAttendance(row)}>
+                          <PenLine size={14} /> Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
+                          onClick={() => deleteAttendance(row)}
+                          disabled={deleteAttendanceId === row.id}
+                        >
+                          <Trash2 size={14} />
+                          {deleteAttendanceId === row.id ? "Menghapus..." : "Hapus"}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {data.length === 0 ? (
+              <p className="py-4 text-sm text-[hsl(var(--muted-foreground))]">Belum ada data untuk tanggal ini.</p>
+            ) : null}
           </div>
         </section>
 
@@ -403,49 +439,91 @@ export default function AdminPage() {
             </div>
 
             {participantsOpen && (
-              <div className="space-y-2">
-                {participants.length === 0 ? (
-                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                    Belum ada peserta atau hasil pencarian kosong.
-                  </p>
-                ) : (
-                  participants.map((p) => (
-                    <div
-                      key={p.id}
-                      className="site-card-list-row flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-semibold text-[hsl(var(--foreground))]">{p.name}</p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                          {p.address ?? "Alamat tidak tersedia"} - {p.gender ?? "N/A"}
-                        </p>
+              <>
+                <div className="space-y-2 md:hidden">
+                  {participants.length === 0 ? (
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                      Belum ada peserta atau hasil pencarian kosong.
+                    </p>
+                  ) : (
+                    participants.map((p) => (
+                      <div key={p.id} className="site-card-list-row space-y-2 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-[hsl(var(--foreground))]">{p.name}</p>
+                          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                            {p.address ?? "Alamat tidak tersedia"} - {p.gender ?? "N/A"}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1 text-[hsl(var(--foreground))]">
+                          <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditParticipant(p)}>
+                            <PenLine size={14} /> Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
+                            onClick={() => deleteParticipant(p)}
+                            disabled={deleteParticipantId === p.id}
+                          >
+                            <Trash2 size={14} />
+                            {deleteParticipantId === p.id ? "Menghapus..." : "Hapus"}
+                          </Button>
+                        </div>
                       </div>
+                    ))
+                  )}
+                </div>
 
-                      <div className="flex flex-wrap gap-1 text-[hsl(var(--foreground))] sm:justify-end">
-                        <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditParticipant(p)}>
-                          <PenLine size={14} /> Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
-                          onClick={() => deleteParticipant(p)}
-                          disabled={deleteParticipantId === p.id}
-                        >
-                          <Trash2 size={14} />
-                          {deleteParticipantId === p.id ? "Menghapus..." : "Hapus"}
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full min-w-[700px] text-sm">
+                    <thead>
+                      <tr className="border-b border-[hsl(var(--border))] text-left text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--muted-foreground))]">
+                        <th className="py-2 pr-2">Nama</th>
+                        <th className="py-2 pr-2">Alamat</th>
+                        <th className="py-2 pr-2">Gender</th>
+                        <th className="py-2 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {participants.map((p) => (
+                        <tr key={p.id} className="border-b border-[hsl(var(--border))/0.7] last:border-b-0">
+                          <td className="py-3 pr-2 font-semibold">{p.name}</td>
+                          <td className="py-3 pr-2 text-[hsl(var(--muted-foreground))]">{p.address ?? "-"}</td>
+                          <td className="py-3 pr-2">{p.gender ?? "N/A"}</td>
+                          <td className="py-3 text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditParticipant(p)}>
+                                <PenLine size={14} /> Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
+                                onClick={() => deleteParticipant(p)}
+                                disabled={deleteParticipantId === p.id}
+                              >
+                                <Trash2 size={14} />
+                                {deleteParticipantId === p.id ? "Menghapus..." : "Hapus"}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {participants.length === 0 ? (
+                    <p className="py-4 text-sm text-[hsl(var(--muted-foreground))]">
+                      Belum ada peserta atau hasil pencarian kosong.
+                    </p>
+                  ) : null}
+                </div>
+              </>
             )}
           </div>
         </section>
       </SiteShell>
 
-      <Dialog
+      <ResponsiveDialog
         open={editAttendanceOpen}
         onOpenChange={(open) => {
           setEditAttendanceOpen(open);
@@ -454,42 +532,36 @@ export default function AdminPage() {
             setEditAttendanceParticipant(null);
           }
         }}
+        title="Edit Presensi"
+        description="Ubah peserta atau tanggal untuk entri presensi ini (termasuk hari sebelumnya)."
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Presensi</DialogTitle>
-            <DialogDescription>
-              Ubah peserta atau tanggal untuk entri presensi ini (termasuk hari sebelumnya).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 space-y-3">
-            <label className="site-label block">Peserta</label>
-            <ParticipantCombobox
-              value={editAttendanceParticipant ?? undefined}
-              onSelect={(p) => setEditAttendanceParticipant(p)}
-              onCreateNew={() => {}}
+        <div className="space-y-3">
+          <label className="site-label block">Peserta</label>
+          <ParticipantCombobox
+            value={editAttendanceParticipant ?? undefined}
+            onSelect={(p) => setEditAttendanceParticipant(p)}
+            onCreateNew={() => {}}
+          />
+          <div className="space-y-2">
+            <label className="site-label block">Tanggal Presensi</label>
+            <Input
+              type="date"
+              value={editAttendanceDate}
+              onChange={(e) => setEditAttendanceDate(e.target.value)}
             />
-            <div className="space-y-2">
-              <label className="site-label block">Tanggal Presensi</label>
-              <Input
-                type="date"
-                value={editAttendanceDate}
-                onChange={(e) => setEditAttendanceDate(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditAttendanceOpen(false)} disabled={savingAttendance}>
-                Batal
-              </Button>
-              <Button onClick={saveAttendance} disabled={savingAttendance}>
-                {savingAttendance ? "Menyimpan..." : "Simpan"}
-              </Button>
-            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => setEditAttendanceOpen(false)} disabled={savingAttendance} className="w-full sm:w-auto">
+              Batal
+            </Button>
+            <Button onClick={saveAttendance} disabled={savingAttendance} className="w-full sm:w-auto">
+              {savingAttendance ? "Menyimpan..." : "Simpan"}
+            </Button>
+          </div>
+        </div>
+      </ResponsiveDialog>
 
-      <Dialog
+      <ResponsiveDialog
         open={editParticipantOpen}
         onOpenChange={(open) => {
           setEditParticipantOpen(open);
@@ -497,51 +569,47 @@ export default function AdminPage() {
             setEditParticipantTarget(null);
           }
         }}
+        title="Edit Peserta"
+        description="Perbaiki nama/alamat/jenis kelamin peserta."
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Peserta</DialogTitle>
-            <DialogDescription>Perbaiki nama/alamat/jenis kelamin peserta.</DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 space-y-3">
-            <div className="space-y-2">
-              <label className="site-label block">Nama</label>
-              <Input value={editParticipantName} onChange={(e) => setEditParticipantName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <label className="site-label block">Alamat</label>
-              <Input
-                value={editParticipantAddress}
-                onChange={(e) => setEditParticipantAddress(e.target.value)}
-                placeholder="Opsional"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="site-label block">Jenis Kelamin (L/P)</label>
-              <Input
-                value={editParticipantGender}
-                onChange={(e) => {
-                  const val = e.target.value.toUpperCase();
-                  if (val === "L" || val === "P") {
-                    setEditParticipantGender(val);
-                  } else if (val === "") {
-                    setEditParticipantGender("");
-                  }
-                }}
-                placeholder="L atau P (kosongkan jika tidak diketahui)"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditParticipantOpen(false)} disabled={savingParticipant}>
-                Batal
-              </Button>
-              <Button onClick={saveParticipant} disabled={savingParticipant}>
-                {savingParticipant ? "Menyimpan..." : "Simpan"}
-              </Button>
-            </div>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <label className="site-label block">Nama</label>
+            <Input value={editParticipantName} onChange={(e) => setEditParticipantName(e.target.value)} />
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-2">
+            <label className="site-label block">Alamat</label>
+            <Input
+              value={editParticipantAddress}
+              onChange={(e) => setEditParticipantAddress(e.target.value)}
+              placeholder="Opsional"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="site-label block">Jenis Kelamin (L/P)</label>
+            <Input
+              value={editParticipantGender}
+              onChange={(e) => {
+                const val = e.target.value.toUpperCase();
+                if (val === "L" || val === "P") {
+                  setEditParticipantGender(val);
+                } else if (val === "") {
+                  setEditParticipantGender("");
+                }
+              }}
+              placeholder="L atau P (kosongkan jika tidak diketahui)"
+            />
+          </div>
+          <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => setEditParticipantOpen(false)} disabled={savingParticipant} className="w-full sm:w-auto">
+              Batal
+            </Button>
+            <Button onClick={saveParticipant} disabled={savingParticipant} className="w-full sm:w-auto">
+              {savingParticipant ? "Menyimpan..." : "Simpan"}
+            </Button>
+          </div>
+        </div>
+      </ResponsiveDialog>
     </PinGate>
   );
 }

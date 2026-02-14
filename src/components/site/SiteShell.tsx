@@ -26,16 +26,16 @@ export function SiteShell({ children }: { children: ReactNode }) {
     <div className="site-page">
       <IslamicBackground />
 
-      <div className="relative z-10 pb-16 pt-4 md:pt-8">
+      <div className="relative z-10 pb-12 pt-3 sm:pb-16 sm:pt-4 md:pt-8">
         <header className="site-container">
-          <div className="site-main-card relative overflow-hidden px-4 py-5 sm:px-5 sm:py-6 md:px-8 md:py-8">
+          <div className="site-main-card relative overflow-hidden px-4 py-4 sm:px-5 sm:py-6 md:px-8 md:py-8">
             <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--accent))/0.65] to-transparent" />
             <div className="absolute inset-x-12 bottom-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--primary))/0.48] to-transparent" />
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-3">
+            <div className="flex flex-col gap-5 sm:gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-2.5 sm:space-y-3">
                 <p className="site-eyebrow">KAJIAN AHAD PAGI</p>
                 <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-                  <h1 className="site-title text-[clamp(2rem,7vw,3.15rem)] text-[hsl(var(--foreground))]">
+                  <h1 className="site-title text-[clamp(1.75rem,7vw,3.15rem)] leading-tight text-[hsl(var(--foreground))]">
                     Masjid Al Irsyad
                   </h1>
                   <span className="site-badge">Sawit</span>
@@ -63,7 +63,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="site-container pt-8 md:pt-10">{children}</main>
+        <main className="site-container pt-6 sm:pt-8 md:pt-10">{children}</main>
       </div>
     </div>
   );
