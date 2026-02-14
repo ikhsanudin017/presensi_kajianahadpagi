@@ -131,7 +131,7 @@ export function ComboboxResponsive({
                     }}
                   >
                     <Plus size={16} />
-                    Tambah "{query.trim()}"
+                    Tambah &quot;{query.trim()}&quot;
                   </Button>
                 ) : null}
               </div>
@@ -171,7 +171,7 @@ export function ComboboxResponsive({
                       </p>
                       {option.subtitle ? (
                         <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-[hsl(var(--muted-foreground))]">
-                          📍 {option.subtitle}
+                          Lokasi: {option.subtitle}
                         </p>
                       ) : null}
                     </div>

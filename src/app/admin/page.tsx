@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { ParticipantCombobox, type Participant } from "@/components/participant-combobox";
 import { useToast } from "@/components/ui/use-toast";
+import { LuckyDrawCard } from "@/components/admin/lucky-draw-card";
+import { WeeklyAttendanceCard } from "@/components/admin/weekly-attendance-card";
 import { safeJson } from "@/lib/http";
 
 dayjs.extend(utc);
@@ -314,6 +316,9 @@ export default function AdminPage() {
             </div>
           </div>
         </PageShell>
+
+        <LuckyDrawCard className="mt-7" />
+        <WeeklyAttendanceCard className="mt-7" weeks={12} />
 
         <section className="site-soft-card mt-7 p-5 md:p-6">
           <div className="flex items-center justify-between gap-2">
