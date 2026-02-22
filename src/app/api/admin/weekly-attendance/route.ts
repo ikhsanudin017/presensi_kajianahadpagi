@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
 import { prisma } from "@/lib/prisma";
-import { JAKARTA_TZ, getJakartaDate } from "@/lib/time";
+import { eventDateToKey, getJakartaDate, toEventDate } from "@/lib/time";
 
 dayjs.extend(utc);
-dayjs.extend(timezone);
 
 type WeeklyParticipant = {
   participantId: string;
@@ -27,8 +25,8 @@ type WeeklyGroup = {
 };
 
 function getWeekStart(date: Date) {
-  const jakartaDate = dayjs(date).tz(JAKARTA_TZ).startOf("day");
-  return jakartaDate.subtract(jakartaDate.day(), "day");
+  const eventDate = dayjs.utc(date).startOf("day");
+  return eventDate.subtract(eventDate.day(), "day");
 }
 
 export async function GET(req: Request) {
@@ -36,14 +34,17 @@ export async function GET(req: Request) {
   const weeksParam = Number(searchParams.get("weeks") ?? "12");
   const safeWeeks = Number.isFinite(weeksParam) && weeksParam > 0 && weeksParam <= 52 ? Math.floor(weeksParam) : 12;
 
-  const today = getJakartaDate().startOf("day");
-  const rangeStart = today.subtract(safeWeeks - 1, "week").startOf("week");
+  const todayJakarta = getJakartaDate().startOf("day");
+  const today = toEventDate(todayJakarta.format("YYYY-MM-DD"));
+  const rangeStart = toEventDate(
+    todayJakarta.subtract(safeWeeks - 1, "week").startOf("week").format("YYYY-MM-DD"),
+  );
 
   const rows = await prisma.attendance.findMany({
     where: {
       eventDate: {
-        gte: rangeStart.toDate(),
-        lte: today.toDate(),
+        gte: rangeStart,
+        lte: today,
       },
     },
     select: {
@@ -83,7 +84,7 @@ export async function GET(req: Request) {
     const weekStart = getWeekStart(row.eventDate);
     const weekStartKey = weekStart.format("YYYY-MM-DD");
     const weekEndKey = weekStart.add(6, "day").format("YYYY-MM-DD");
-    const eventDateKey = dayjs(row.eventDate).tz(JAKARTA_TZ).format("YYYY-MM-DD");
+    const eventDateKey = eventDateToKey(row.eventDate);
 
     if (!weeklyMap.has(weekStartKey)) {
       weeklyMap.set(weekStartKey, {

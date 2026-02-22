@@ -3,6 +3,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { appendRow } from "@/lib/googleSheets";
+import { syncParticipantsFromSheetToDatabase } from "@/lib/participants-sheet-sync";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const participantSchema = z.object({
   name: z.string().trim().min(1),
@@ -16,6 +20,13 @@ export async function GET(req: Request) {
   const take = Number(searchParams.get("limit") ?? "200");
   const page = Number(searchParams.get("page") ?? "1");
   const skip = page > 1 && Number.isFinite(page) ? (page - 1) * take : 0;
+  const syncSheet = searchParams.get("syncSheet");
+
+  if (syncSheet !== "0") {
+    await syncParticipantsFromSheetToDatabase().catch((error) => {
+      console.error("Failed to sync participants from sheet", error);
+    });
+  }
 
   const where: Prisma.ParticipantWhereInput | undefined = query
     ? {
@@ -35,14 +46,21 @@ export async function GET(req: Request) {
 
   const total = await prisma.participant.count({ where });
 
-  return NextResponse.json({
-    data: participants,
-    meta: {
-      total,
-      page: Number.isFinite(page) ? page : 1,
-      pageSize: Number.isFinite(take) ? Math.min(take, 500) : 200,
+  return NextResponse.json(
+    {
+      data: participants,
+      meta: {
+        total,
+        page: Number.isFinite(page) ? page : 1,
+        pageSize: Number.isFinite(take) ? Math.min(take, 500) : 200,
+      },
     },
-  });
+    {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    },
+  );
 }
 
 export async function POST(req: Request) {
@@ -72,7 +90,7 @@ export async function POST(req: Request) {
   }
 
   const sheetName =
-    process.env.GOOGLE_SHEETS_PARTICIPANTS_SHEET_NAME ?? "Participants";
+    process.env.GOOGLE_SHEETS_PARTICIPANTS_SHEET_NAME ?? "Peserta";
 
   let sheetWarning: string | null = null;
   if (created) {

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getJakartaDate } from "@/lib/time";
+import { getJakartaDate, toEventDate } from "@/lib/time";
 
 function getStartDate(range: string | null) {
   const now = getJakartaDate();
   if (range === "30d") {
-    return now.subtract(30, "day").startOf("day").toDate();
+    return toEventDate(now.subtract(30, "day").format("YYYY-MM-DD"));
   }
   if (range === "90d") {
-    return now.subtract(90, "day").startOf("day").toDate();
+    return toEventDate(now.subtract(90, "day").format("YYYY-MM-DD"));
   }
   return null;
 }

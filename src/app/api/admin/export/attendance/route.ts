@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { toEventDate } from "@/lib/time";
+import { eventDateToKey, toEventDate } from "@/lib/time";
 import dayjs from "dayjs";
 
 function csvEscape(value: string) {
@@ -22,6 +22,7 @@ export async function GET(req: Request) {
 
   const today = toEventDate();
   const eventDate = dateParam ? toEventDate(dateParam) : null;
+  const currentYearStart = toEventDate(`${today.getUTCFullYear()}-01-01`);
 
   const whereDate =
     range === "all"
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
           }
         : range === "year"
           ? {
-              gte: new Date(today.getFullYear(), 0, 1),
+              gte: currentYearStart,
               lte: today,
             }
           : eventDate
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
 
   const header = ["tanggal_kajian", "dibuat_pada", "nama", "alamat", "jenis_kelamin", "id_perangkat"];
   const rows = attendance.map((row) => [
-    dayjs(row.eventDate).format("YYYY-MM-DD"),
+    eventDateToKey(row.eventDate),
     dayjs(row.createdAt).toISOString(),
     row.participant.name ?? "",
     row.participant.address ?? "",

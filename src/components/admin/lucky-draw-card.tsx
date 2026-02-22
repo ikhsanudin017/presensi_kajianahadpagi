@@ -15,6 +15,8 @@ type LuckyDrawParticipant = {
 type LuckyDrawResponse = {
   ok?: boolean;
   sourceDate?: string | null;
+  sourceDateEnd?: string | null;
+  sourceSessionDates?: string[];
   participants?: LuckyDrawParticipant[];
   totalParticipants?: number;
   message?: string;
@@ -51,6 +53,9 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
   const [drawing, setDrawing] = React.useState(false);
   const [participants, setParticipants] = React.useState<LuckyDrawParticipant[]>([]);
   const [sourceDate, setSourceDate] = React.useState<string | null>(null);
+  const [sourceDateEnd, setSourceDateEnd] = React.useState<string | null>(null);
+  const [sourceSessionDates, setSourceSessionDates] = React.useState<string[]>([]);
+  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
   const [rollingName, setRollingName] = React.useState("");
   const [winner, setWinner] = React.useState<LuckyDrawParticipant | null>(null);
 
@@ -82,18 +87,27 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
       if (!res.ok || !json?.ok) {
         setParticipants([]);
         setSourceDate(null);
+        setSourceDateEnd(null);
+        setSourceSessionDates([]);
+        setStatusMessage("Data undian belum tersedia.");
         setRollingName("");
         return;
       }
       const nextParticipants = json.participants ?? [];
       setParticipants(nextParticipants);
       setSourceDate(json.sourceDate ?? null);
+      setSourceDateEnd(json.sourceDateEnd ?? null);
+      setSourceSessionDates(json.sourceSessionDates ?? []);
+      setStatusMessage(json.message ?? null);
       setRollingName(nextParticipants[0]?.name ?? "");
       setWinner(null);
     } catch (error) {
       console.error(error);
       setParticipants([]);
       setSourceDate(null);
+      setSourceDateEnd(null);
+      setSourceSessionDates([]);
+      setStatusMessage("Gagal memuat data undian.");
       setRollingName("");
     } finally {
       setLoading(false);
@@ -135,7 +149,7 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
         <div>
           <p className="site-label">Undian Hadiah</p>
           <h3 className="site-title mt-1 text-xl text-[hsl(var(--foreground))] md:text-2xl">
-            Lucky Draw Ahad Lalu
+            Lucky Draw Pekan Lalu
           </h3>
         </div>
         <Button
@@ -151,9 +165,13 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
       </div>
 
       <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
-        Pemenang dipilih dari presensi tanggal{" "}
-        <span className="font-semibold text-[hsl(var(--foreground))]">{toIndonesiaDateLabel(sourceDate)}</span>.
+        Pemenang dipilih dari presensi pekan{" "}
+        <span className="font-semibold text-[hsl(var(--foreground))]">{toIndonesiaDateLabel(sourceDate)}</span>{" "}
+        - <span className="font-semibold text-[hsl(var(--foreground))]">{toIndonesiaDateLabel(sourceDateEnd)}</span>.
       </p>
+      {sourceSessionDates.length > 0 ? (
+        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Sesi: {sourceSessionDates.join(", ")}</p>
+      ) : null}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
         <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))/0.92] p-4 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.38)]">
@@ -197,8 +215,9 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
             Refresh Peserta
           </Button>
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            {canDraw ? `${participants.length} peserta unik siap diundi.` : "Data Ahad lalu belum tersedia."}
+            {canDraw ? `${participants.length} peserta unik siap diundi.` : "Data pekan lalu belum tersedia."}
           </p>
+          {statusMessage ? <p className="text-xs text-[hsl(var(--muted-foreground))]">{statusMessage}</p> : null}
         </div>
       </div>
     </section>

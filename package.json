@@ -10,7 +10,9 @@
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed:excel": "tsx scripts/seedFromExcel.ts",
-    "gsheet:create": "tsx scripts/createGoogleSpreadsheet.ts"
+    "gsheet:create": "tsx scripts/createGoogleSpreadsheet.ts",
+    "gsheet:sync": "tsx scripts/syncGoogleSheets.ts",
+    "gsheet:style": "tsx scripts/styleGoogleSheets.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",

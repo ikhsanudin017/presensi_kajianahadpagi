@@ -36,7 +36,7 @@ export function ParticipantCombobox({ value, onSelect, onCreateNew, open: openPr
     const handler = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/participants?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/participants?q=${encodeURIComponent(query)}`, { cache: "no-store" });
         const data = await safeJson<{ data?: Participant[] }>(res);
         setItems(data?.data ?? []);
       } catch (error) {

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { toEventDate } from "@/lib/time";
+import { syncAttendanceSheetFromDatabase } from "@/lib/attendance-sheet-sync";
 
 const patchSchema = z.object({
   participantId: z.string().min(1),
-  eventDate: z.string().optional(), // ISO date string YYYY-MM-DD
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 type ParamsPromise = {
@@ -25,7 +27,7 @@ export async function PATCH(req: Request, { params }: ParamsPromise) {
       participantId: parsed.data.participantId,
     };
     if (parsed.data.eventDate) {
-      dataToUpdate.eventDate = new Date(parsed.data.eventDate);
+      dataToUpdate.eventDate = toEventDate(parsed.data.eventDate);
     }
 
     const updated = await prisma.attendance.update({
@@ -34,7 +36,16 @@ export async function PATCH(req: Request, { params }: ParamsPromise) {
       include: { participant: true },
     });
 
-    return NextResponse.json({ ok: true, data: updated });
+    const syncResult = await syncAttendanceSheetFromDatabase().catch((error) => {
+      console.error("Failed to sync attendance sheet after update", error);
+      return { ok: false } as const;
+    });
+
+    return NextResponse.json({
+      ok: true,
+      data: updated,
+      warning: syncResult.ok ? null : "SHEET_SYNC_FAILED",
+    });
   } catch (error: unknown) {
     if (typeof error === "object" && error && "code" in error) {
       const code = (error as { code?: string }).code;
@@ -54,7 +65,14 @@ export async function DELETE(_req: Request, { params }: ParamsPromise) {
   try {
     const { id } = await params;
     await prisma.attendance.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
+    const syncResult = await syncAttendanceSheetFromDatabase().catch((error) => {
+      console.error("Failed to sync attendance sheet after delete", error);
+      return { ok: false } as const;
+    });
+    return NextResponse.json({
+      ok: true,
+      warning: syncResult.ok ? null : "SHEET_SYNC_FAILED",
+    });
   } catch (error: unknown) {
     if (typeof error === "object" && error && "code" in error) {
       const code = (error as { code?: string }).code;

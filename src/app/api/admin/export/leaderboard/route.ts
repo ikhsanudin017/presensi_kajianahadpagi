@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import dayjs from "dayjs";
-import isBetween from "dayjs/plugin/isBetween";
 import { prisma } from "@/lib/prisma";
-import { getJakartaDate, isSunday, formatJakartaDate } from "@/lib/time";
-
-dayjs.extend(isBetween);
+import { eventDateToKey, formatJakartaDate, getJakartaDate, isSunday, toEventDate } from "@/lib/time";
 
 type StreakRow = {
   participantId: string;
@@ -23,13 +20,13 @@ function csvEscape(value: string) {
 function getStartDate(range: string | null) {
   const now = getJakartaDate();
   if (range === "30d" || range === "last30") {
-    return now.subtract(30, "day").startOf("day").toDate();
+    return toEventDate(now.subtract(30, "day").format("YYYY-MM-DD"));
   }
   if (range === "90d") {
-    return now.subtract(90, "day").startOf("day").toDate();
+    return toEventDate(now.subtract(90, "day").format("YYYY-MM-DD"));
   }
   if (range === "year") {
-    return now.startOf("year").startOf("day").toDate();
+    return toEventDate(now.startOf("year").format("YYYY-MM-DD"));
   }
   return null;
 }
@@ -135,16 +132,19 @@ export async function GET(req: Request) {
   );
 
   // Absent (berdasarkan sesi dalam rentang weeks)
-  const endDate = dayjs().endOf("week");
-  const startWeek = endDate.subtract(safeWeeks - 1, "week").startOf("week");
-  const attendanceRange = attendanceAll.filter(
-    (r) => dayjs(r.eventDate).isBetween(startWeek, endDate, "day", "[]"),
+  const endOfWeekJakarta = getJakartaDate().endOf("week");
+  const endDate = toEventDate(endOfWeekJakarta.format("YYYY-MM-DD"));
+  const startWeek = toEventDate(
+    endOfWeekJakarta.subtract(safeWeeks - 1, "week").startOf("week").format("YYYY-MM-DD"),
   );
-  const sessionDates = Array.from(new Set(attendanceRange.map((row) => dayjs(row.eventDate).format("YYYY-MM-DD"))));
+  const attendanceRange = attendanceAll.filter(
+    (r) => r.eventDate >= startWeek && r.eventDate <= endDate,
+  );
+  const sessionDates = Array.from(new Set(attendanceRange.map((row) => eventDateToKey(row.eventDate))));
   const sessionsCount = sessionDates.length;
   const attendanceMap = new Map<string, Set<string>>();
   for (const row of attendanceRange) {
-    const key = dayjs(row.eventDate).format("YYYY-MM-DD");
+    const key = eventDateToKey(row.eventDate);
     if (!attendanceMap.has(row.participantId)) attendanceMap.set(row.participantId, new Set());
     attendanceMap.get(row.participantId)!.add(key);
   }

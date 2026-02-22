@@ -1,24 +1,23 @@
 import { NextResponse } from "next/server";
-import dayjs from "dayjs";
-import weekday from "dayjs/plugin/weekday";
 import { prisma } from "@/lib/prisma";
-
-dayjs.extend(weekday);
+import { eventDateToKey, getJakartaDate, toEventDate } from "@/lib/time";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const weeksParam = Number(searchParams.get("weeks") ?? "4");
   const safeWeeks = Number.isFinite(weeksParam) && weeksParam > 0 && weeksParam <= 52 ? Math.floor(weeksParam) : 4;
 
-  // define range: last `safeWeeks` weeks (Sunday–Saturday)
-  const endDate = dayjs().endOf("week");
-  const startDate = endDate.subtract(safeWeeks - 1, "week").startOf("week");
+  const endOfWeekJakarta = getJakartaDate().endOf("week");
+  const startDateKey = endOfWeekJakarta.subtract(safeWeeks - 1, "week").startOf("week").format("YYYY-MM-DD");
+  const endDateKey = endOfWeekJakarta.format("YYYY-MM-DD");
+  const startDate = toEventDate(startDateKey);
+  const endDate = toEventDate(endDateKey);
 
   const attendance = await prisma.attendance.findMany({
     where: {
       eventDate: {
-        gte: startDate.toDate(),
-        lte: endDate.toDate(),
+        gte: startDate,
+        lte: endDate,
       },
     },
     include: { participant: { select: { id: true, name: true } } },
@@ -27,7 +26,7 @@ export async function GET(req: Request) {
   // only count sessions (kajian) that actually happened in the range,
   // identified by unique eventDate values that have at least one attendance row
   const sessionDates = Array.from(
-    new Set(attendance.map((row) => dayjs(row.eventDate).format("YYYY-MM-DD"))),
+    new Set(attendance.map((row) => eventDateToKey(row.eventDate))),
   );
   const sessionsCount = sessionDates.length;
 
@@ -38,7 +37,7 @@ export async function GET(req: Request) {
   const attendanceMap = new Map<string, Set<string>>(); // participantId -> set of session date keys
 
   for (const row of attendance) {
-    const sessionKey = dayjs(row.eventDate).format("YYYY-MM-DD");
+    const sessionKey = eventDateToKey(row.eventDate);
     if (!attendanceMap.has(row.participantId)) {
       attendanceMap.set(row.participantId, new Set());
     }
@@ -63,8 +62,8 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ok: true,
     range: {
-      start: startDate.format("YYYY-MM-DD"),
-      end: endDate.format("YYYY-MM-DD"),
+      start: startDateKey,
+      end: endDateKey,
       weeks: safeWeeks,
       sessions: sessionsCount,
       sessionDates,

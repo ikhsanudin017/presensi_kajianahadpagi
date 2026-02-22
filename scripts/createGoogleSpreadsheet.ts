@@ -29,8 +29,8 @@ async function main() {
         title: "Presensi Kajian Ahad - Masjid Al Irsyad",
       },
       sheets: [
-        { properties: { title: "Participants" } },
-        { properties: { title: "Attendance" } },
+        { properties: { title: "Peserta" } },
+        { properties: { title: "Presensi" } },
       ],
     },
   });
@@ -42,19 +42,19 @@ async function main() {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: "Participants!A1",
+    range: "Peserta!A1",
     valueInputOption: "RAW",
     requestBody: {
-      values: [["createdAt", "name", "address", "gender"]],
+      values: [["dibuat_pada", "nama", "alamat", "jenis_kelamin"]],
     },
   });
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: "Attendance!A1",
+    range: "Presensi!A1",
     valueInputOption: "RAW",
     requestBody: {
-      values: [["timestamp", "eventDate", "name", "address", "gender", "deviceId"]],
+      values: [["waktu_input", "tanggal_kajian", "nama", "alamat", "jenis_kelamin", "id_perangkat"]],
     },
   });
 

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { appendRow } from "@/lib/googleSheets";
 import { toEventDate } from "@/lib/time";
+import { syncAttendanceSheetFromDatabase } from "@/lib/attendance-sheet-sync";
 
 const markSchema = z.object({
   participantId: z.string().min(1),
@@ -27,6 +27,7 @@ export async function GET(req: Request) {
 
   const today = toEventDate();
   const eventDate = dateParam ? toEventDate(dateParam) : null;
+  const currentYearStart = toEventDate(`${today.getUTCFullYear()}-01-01`);
 
   const whereDate =
     range === "all"
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
           }
         : range === "year"
           ? {
-              gte: new Date(today.getFullYear(), 0, 1),
+              gte: currentYearStart,
               lte: today,
             }
           : eventDate
@@ -102,23 +103,13 @@ export async function POST(req: Request) {
     include: { participant: true },
   });
 
-  const sheetName =
-    process.env.GOOGLE_SHEETS_ATTENDANCE_SHEET_NAME ?? "Attendance";
-
   let sheetWarning: string | null = null;
-  const appendResult = await appendRow(sheetName, [
-    attendance.createdAt.toISOString(),
-    attendance.eventDate.toISOString().slice(0, 10),
-    attendance.participant.name,
-    attendance.participant.address ?? "",
-    attendance.participant.gender ?? "",
-    attendance.deviceId ?? "",
-  ]).catch((error) => {
-    console.error("Failed to append attendance to sheet", error);
+  const syncResult = await syncAttendanceSheetFromDatabase().catch((error) => {
+    console.error("Failed to sync attendance sheet", error);
     return { ok: false } as const;
   });
 
-  if (!appendResult.ok) {
+  if (!syncResult.ok) {
     sheetWarning = "SHEET_SYNC_FAILED";
   }
 
@@ -133,13 +124,33 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
+  const participantId = searchParams.get("participantId");
+  const eventDateParam = searchParams.get("eventDate");
 
-  if (!id) {
-    return NextResponse.json({ ok: false, error: "ID_REQUIRED" }, { status: 400 });
+  if (!id && (!participantId || !eventDateParam)) {
+    return NextResponse.json({ ok: false, error: "ID_OR_PARTICIPANT_DATE_REQUIRED" }, { status: 400 });
+  }
+
+  if (eventDateParam && !/^\d{4}-\d{2}-\d{2}$/.test(eventDateParam)) {
+    return NextResponse.json({ ok: false, error: "INVALID_DATE" }, { status: 400 });
   }
 
   try {
-    await prisma.attendance.delete({ where: { id } });
+    if (id) {
+      await prisma.attendance.delete({ where: { id } });
+    } else if (participantId && eventDateParam) {
+      await prisma.attendance.delete({
+        where: {
+          participantId_eventDate: {
+            participantId,
+            eventDate: toEventDate(eventDateParam),
+          },
+        },
+      });
+    }
+    await syncAttendanceSheetFromDatabase().catch((error) => {
+      console.error("Failed to sync attendance sheet after delete", error);
+    });
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {
     if (typeof error === "object" && error && "code" in error) {

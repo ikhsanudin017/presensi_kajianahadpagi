@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import { prisma } from "@/lib/prisma";
-import { formatJakartaDate, getJakartaDate, isSunday } from "@/lib/time";
+import { formatJakartaDate, getJakartaDate, toEventDate } from "@/lib/time";
+
+dayjs.extend(utc);
 
 type LuckyDrawParticipant = {
   participantId: string;
@@ -9,42 +13,56 @@ type LuckyDrawParticipant = {
 };
 
 export async function GET() {
-  const todayStart = getJakartaDate().startOf("day").toDate();
+  const todayStart = toEventDate();
+  const currentWeekStart = dayjs
+    .utc(todayStart)
+    .startOf("day")
+    .subtract(dayjs.utc(todayStart).day(), "day")
+    .toDate();
 
-  const recentDates = await prisma.attendance.findMany({
+  const latestCompletedWeekDate = await prisma.attendance.findFirst({
     where: {
       eventDate: {
-        lt: todayStart,
+        lt: currentWeekStart,
       },
     },
     select: {
       eventDate: true,
     },
-    distinct: ["eventDate"],
     orderBy: {
       eventDate: "desc",
     },
-    take: 180,
   });
 
-  const latestSunday = recentDates.find((row) => isSunday(row.eventDate))?.eventDate;
-
-  if (!latestSunday) {
+  if (!latestCompletedWeekDate?.eventDate) {
     return NextResponse.json({
       ok: true,
       sourceDate: null,
+      sourceDateEnd: null,
+      sourceSessionDates: [] as string[],
       participants: [] as LuckyDrawParticipant[],
       totalParticipants: 0,
-      message: "Belum ada data presensi Ahad sebelum hari ini.",
+      message: "Belum ada data presensi pekan lalu.",
     });
   }
 
+  const weekStart = dayjs
+    .utc(latestCompletedWeekDate.eventDate)
+    .startOf("day")
+    .subtract(dayjs.utc(latestCompletedWeekDate.eventDate).day(), "day")
+    .toDate();
+  const weekEnd = dayjs.utc(weekStart).add(6, "day").toDate();
+
   const attendanceRows = await prisma.attendance.findMany({
     where: {
-      eventDate: latestSunday,
+      eventDate: {
+        gte: weekStart,
+        lte: weekEnd,
+      },
     },
     select: {
       participantId: true,
+      eventDate: true,
       participant: {
         select: {
           id: true,
@@ -56,8 +74,10 @@ export async function GET() {
   });
 
   const uniqueParticipants = new Map<string, LuckyDrawParticipant>();
+  const sessions = new Set<string>();
 
   for (const row of attendanceRows) {
+    sessions.add(formatJakartaDate(row.eventDate));
     if (!uniqueParticipants.has(row.participantId)) {
       uniqueParticipants.set(row.participantId, {
         participantId: row.participant.id,
@@ -73,7 +93,9 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    sourceDate: formatJakartaDate(latestSunday),
+    sourceDate: formatJakartaDate(weekStart),
+    sourceDateEnd: formatJakartaDate(weekEnd),
+    sourceSessionDates: Array.from(sessions).sort((a, b) => a.localeCompare(b)),
     participants,
     totalParticipants: participants.length,
     generatedAt: getJakartaDate().toISOString(),

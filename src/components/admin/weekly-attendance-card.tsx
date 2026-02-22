@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { CalendarRange, RotateCcw } from "lucide-react";
+import { CalendarRange, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { safeJson } from "@/lib/http";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/use-toast";
 
 type WeeklyParticipant = {
   participantId: string;
@@ -48,8 +49,10 @@ function toShortDateLabel(dateString: string) {
 }
 
 export function WeeklyAttendanceCard({ className, weeks = 12 }: WeeklyAttendanceCardProps) {
+  const { showToast } = useToast();
   const [loading, setLoading] = React.useState(false);
   const [groups, setGroups] = React.useState<WeeklyGroup[]>([]);
+  const [deletingKey, setDeletingKey] = React.useState<string | null>(null);
 
   const fetchWeeklyAttendance = React.useCallback(async () => {
     setLoading(true);
@@ -72,6 +75,37 @@ export function WeeklyAttendanceCard({ className, weeks = 12 }: WeeklyAttendance
   React.useEffect(() => {
     fetchWeeklyAttendance();
   }, [fetchWeeklyAttendance]);
+
+  const deleteAttendanceByDate = async (participant: WeeklyParticipant, eventDate: string) => {
+    const confirmDelete = window.confirm(`Hapus presensi ${participant.name} tanggal ${eventDate}?`);
+    if (!confirmDelete) {
+      return;
+    }
+
+    const key = `${participant.participantId}:${eventDate}`;
+    setDeletingKey(key);
+    try {
+      const res = await fetch(
+        `/api/attendance?participantId=${encodeURIComponent(participant.participantId)}&eventDate=${encodeURIComponent(eventDate)}`,
+        {
+          method: "DELETE",
+          headers: { Accept: "application/json" },
+        },
+      );
+      const json = await safeJson<{ ok?: boolean }>(res);
+      if (!res.ok || !json?.ok) {
+        showToast({ title: "Gagal menghapus presensi" });
+        return;
+      }
+      showToast({ title: "Presensi dihapus", description: `${participant.name} - ${eventDate}` });
+      await fetchWeeklyAttendance();
+    } catch (error) {
+      console.error(error);
+      showToast({ title: "Terjadi error saat menghapus" });
+    } finally {
+      setDeletingKey(null);
+    }
+  };
 
   return (
     <section className={cn("site-soft-card p-5 md:p-6", className)}>
@@ -134,17 +168,37 @@ export function WeeklyAttendanceCard({ className, weeks = 12 }: WeeklyAttendance
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">
                         {participant.address || "Alamat belum tersedia"}
                       </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {participant.attendedDates.map((date) => {
+                          const key = `${participant.participantId}:${date}`;
+                          return (
+                            <Button
+                              key={key}
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 gap-1 px-2 text-[11px]"
+                              onClick={() => deleteAttendanceByDate(participant, date)}
+                              disabled={deletingKey === key}
+                            >
+                              <Trash2 size={12} />
+                              {deletingKey === key ? "Menghapus..." : date}
+                            </Button>
+                          );
+                        })}
+                      </div>
                     </div>
                   ))}
                 </div>
 
-                <table className="hidden w-full min-w-[580px] text-sm md:table">
+                <table className="hidden w-full min-w-[680px] text-sm md:table">
                   <thead>
                     <tr className="border-b border-[hsl(var(--border))/0.8] text-left text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--muted-foreground))]">
                       <th className="px-3 py-2">Nama Peserta</th>
                       <th className="px-3 py-2">Alamat</th>
                       <th className="px-3 py-2 text-right">Jumlah Hadir</th>
                       <th className="px-3 py-2">Tanggal Hadir</th>
+                      <th className="px-3 py-2 text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -162,6 +216,27 @@ export function WeeklyAttendanceCard({ className, weeks = 12 }: WeeklyAttendance
                         <td className="px-3 py-2.5 text-right font-semibold">{participant.attendedSessions}</td>
                         <td className="px-3 py-2.5 text-[hsl(var(--muted-foreground))]">
                           {participant.attendedDates.join(", ")}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            {participant.attendedDates.map((date) => {
+                              const key = `${participant.participantId}:${date}`;
+                              return (
+                                <Button
+                                  key={key}
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 gap-1 px-2 text-[11px]"
+                                  onClick={() => deleteAttendanceByDate(participant, date)}
+                                  disabled={deletingKey === key}
+                                >
+                                  <Trash2 size={12} />
+                                  {deletingKey === key ? "Menghapus..." : date}
+                                </Button>
+                              );
+                            })}
+                          </div>
                         </td>
                       </tr>
                     ))}

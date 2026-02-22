@@ -122,7 +122,9 @@ export default function AdminPage() {
   const fetchParticipants = React.useCallback(async () => {
     setParticipantLoading(true);
     try {
-      const res = await fetch(`/api/participants?q=${encodeURIComponent(participantSearch)}&limit=200`);
+      const res = await fetch(`/api/participants?q=${encodeURIComponent(participantSearch)}&limit=200`, {
+        cache: "no-store",
+      });
       const json = await safeJson<{ data?: ParticipantRow[]; meta?: { total?: number } }>(res);
       setParticipants(json?.data ?? []);
       setParticipantTotal(json?.meta?.total ?? (json?.data?.length ?? 0));
