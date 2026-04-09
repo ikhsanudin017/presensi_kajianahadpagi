@@ -3,15 +3,22 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { prisma } from "@/lib/prisma";
 import { eventDateToKey, getJakartaDate, toEventDate } from "@/lib/time";
+import { normalizePersonName } from "@/lib/name-matching";
+import { syncAttendanceSheetFromDatabase } from "@/lib/attendance-sheet-sync";
 
 dayjs.extend(utc);
 
 type WeeklyParticipant = {
-  participantId: string;
+  mergeKey: string;
+  participantIds: string[];
   name: string;
   address: string | null;
   attendedSessions: number;
   attendedDates: string[];
+  dateTargets: Array<{
+    eventDate: string;
+    participantIds: string[];
+  }>;
 };
 
 type WeeklyGroup = {
@@ -27,6 +34,25 @@ type WeeklyGroup = {
 function getWeekStart(date: Date) {
   const eventDate = dayjs.utc(date).startOf("day");
   return eventDate.subtract(eventDate.day(), "day");
+}
+
+function choosePreferredText(current: string | null, incoming: string | null) {
+  const currentValue = current?.trim() || "";
+  const incomingValue = incoming?.trim() || "";
+
+  if (!currentValue) {
+    return incomingValue || null;
+  }
+
+  if (!incomingValue) {
+    return currentValue;
+  }
+
+  return incomingValue.length > currentValue.length ? incomingValue : currentValue;
+}
+
+function normalizeWeeklyKey(name: string) {
+  return normalizePersonName(name) || name.trim().toLowerCase();
 }
 
 export async function GET(req: Request) {
@@ -70,13 +96,13 @@ export async function GET(req: Request) {
       participantsMap: Map<
         string,
         {
-          participantId: string;
+          mergeKey: string;
+          participantIds: Set<string>;
           name: string;
           address: string | null;
-          attendedDates: Set<string>;
+          datesMap: Map<string, Set<string>>;
         }
       >;
-      totalAttendance: number;
     }
   >();
 
@@ -92,7 +118,6 @@ export async function GET(req: Request) {
         weekEnd: weekEndKey,
         sessionDates: new Set<string>(),
         participantsMap: new Map(),
-        totalAttendance: 0,
       });
     }
 
@@ -101,37 +126,59 @@ export async function GET(req: Request) {
       continue;
     }
 
-    weekGroup.totalAttendance += 1;
     weekGroup.sessionDates.add(eventDateKey);
+    const mergeKey = normalizeWeeklyKey(row.participant.name);
 
-    if (!weekGroup.participantsMap.has(row.participantId)) {
-      weekGroup.participantsMap.set(row.participantId, {
-        participantId: row.participant.id,
+    if (!weekGroup.participantsMap.has(mergeKey)) {
+      weekGroup.participantsMap.set(mergeKey, {
+        mergeKey,
+        participantIds: new Set<string>(),
         name: row.participant.name,
         address: row.participant.address,
-        attendedDates: new Set<string>(),
+        datesMap: new Map<string, Set<string>>(),
       });
     }
 
-    weekGroup.participantsMap.get(row.participantId)?.attendedDates.add(eventDateKey);
+    const participantGroup = weekGroup.participantsMap.get(mergeKey);
+    if (!participantGroup) {
+      continue;
+    }
+
+    participantGroup.participantIds.add(row.participant.id);
+    participantGroup.name = choosePreferredText(participantGroup.name, row.participant.name) ?? row.participant.name;
+    participantGroup.address = choosePreferredText(participantGroup.address, row.participant.address);
+
+    if (!participantGroup.datesMap.has(eventDateKey)) {
+      participantGroup.datesMap.set(eventDateKey, new Set<string>());
+    }
+    participantGroup.datesMap.get(eventDateKey)?.add(row.participant.id);
   }
 
   const data: WeeklyGroup[] = Array.from(weeklyMap.values())
     .map((group) => {
       const participants: WeeklyParticipant[] = Array.from(group.participantsMap.values())
         .map((participant) => {
-          const attendedDates = Array.from(participant.attendedDates).sort((a, b) => a.localeCompare(b));
+          const dateTargets = Array.from(participant.datesMap.entries())
+            .map(([eventDate, participantIds]) => ({
+              eventDate,
+              participantIds: Array.from(participantIds.values()).sort((a, b) => a.localeCompare(b)),
+            }))
+            .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+          const attendedDates = dateTargets.map((item) => item.eventDate);
           return {
-            participantId: participant.participantId,
+            mergeKey: participant.mergeKey,
+            participantIds: Array.from(participant.participantIds.values()).sort((a, b) => a.localeCompare(b)),
             name: participant.name,
             address: participant.address,
             attendedSessions: attendedDates.length,
             attendedDates,
+            dateTargets,
           };
         })
         .sort((a, b) => b.attendedSessions - a.attendedSessions || a.name.localeCompare(b.name, "id"));
 
       const sessionDates = Array.from(group.sessionDates).sort((a, b) => a.localeCompare(b));
+      const totalAttendance = participants.reduce((sum, participant) => sum + participant.attendedSessions, 0);
 
       return {
         weekStart: group.weekStart,
@@ -139,7 +186,7 @@ export async function GET(req: Request) {
         sessionDates,
         sessionsCount: sessionDates.length,
         uniqueParticipants: participants.length,
-        totalAttendance: group.totalAttendance,
+        totalAttendance,
         participants,
       };
     })
@@ -153,4 +200,68 @@ export async function GET(req: Request) {
       generatedAt: getJakartaDate().toISOString(),
     },
   });
+}
+
+export async function DELETE(req: Request) {
+  const body = await req.json().catch(() => null);
+  const parsed = body as
+    | {
+        weekStart?: string;
+        participantIds?: string[];
+        eventDate?: string;
+      }
+    | null;
+
+  if (!parsed) {
+    return NextResponse.json({ ok: false, error: "INVALID_INPUT" }, { status: 400 });
+  }
+
+  const { weekStart, participantIds, eventDate } = parsed;
+
+  try {
+    if (weekStart) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+        return NextResponse.json({ ok: false, error: "INVALID_WEEK_START" }, { status: 400 });
+      }
+
+      const start = toEventDate(weekStart);
+      const end = dayjs.utc(start).add(6, "day").toDate();
+      const deleted = await prisma.attendance.deleteMany({
+        where: {
+          eventDate: {
+            gte: start,
+            lte: end,
+          },
+        },
+      });
+
+      await syncAttendanceSheetFromDatabase().catch((error) => {
+        console.error("Failed to sync attendance sheet after weekly delete", error);
+      });
+
+      return NextResponse.json({ ok: true, deletedCount: deleted.count });
+    }
+
+    if (!eventDate || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !participantIds?.length) {
+      return NextResponse.json({ ok: false, error: "PARTICIPANTS_AND_DATE_REQUIRED" }, { status: 400 });
+    }
+
+    const deleted = await prisma.attendance.deleteMany({
+      where: {
+        participantId: {
+          in: participantIds,
+        },
+        eventDate: toEventDate(eventDate),
+      },
+    });
+
+    await syncAttendanceSheetFromDatabase().catch((error) => {
+      console.error("Failed to sync attendance sheet after merged delete", error);
+    });
+
+    return NextResponse.json({ ok: true, deletedCount: deleted.count });
+  } catch (error) {
+    console.error("Failed to delete weekly attendance", error);
+    return NextResponse.json({ ok: false, error: "SERVER_ERROR" }, { status: 500 });
+  }
 }

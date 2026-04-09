@@ -4,7 +4,7 @@ import * as React from "react";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
-import { PenLine, Trash2, ChevronDown } from "lucide-react";
+import { PenLine, Trash2, ChevronDown, Search, ListFilter, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { PinGate } from "@/components/pin-gate";
 import { SiteShell } from "@/components/site/SiteShell";
@@ -43,6 +43,11 @@ export default function AdminPage() {
   const [query, setQuery] = React.useState("");
   const [data, setData] = React.useState<AttendanceRow[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const [attendanceTableSearch, setAttendanceTableSearch] = React.useState("");
+  const deferredAttendanceTableSearch = React.useDeferredValue(attendanceTableSearch);
+  const [attendanceSourceFilter, setAttendanceSourceFilter] = React.useState<"all" | "manual" | "ai">("all");
+  const [attendancePage, setAttendancePage] = React.useState(1);
+  const [attendancePageSize, setAttendancePageSize] = React.useState(15);
   const [participants, setParticipants] = React.useState<ParticipantRow[]>([]);
   const [participantSearch, setParticipantSearch] = React.useState("");
   const [participantLoading, setParticipantLoading] = React.useState(false);
@@ -70,7 +75,7 @@ export default function AdminPage() {
         range === "single"
           ? `date=${encodeURIComponent(date)}`
           : `range=${encodeURIComponent(range)}`;
-      const res = await fetch(`/api/attendance?${params}&q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/attendance?${params}&q=${encodeURIComponent(query)}&limit=500`);
       const json = await safeJson<{ data?: AttendanceRow[] }>(res);
       setData(json?.data ?? []);
     } catch (error) {
@@ -142,6 +147,55 @@ export default function AdminPage() {
   React.useEffect(() => {
     fetchParticipants();
   }, [fetchParticipants]);
+
+  const filteredAttendance = data.filter((row) => {
+    const search = deferredAttendanceTableSearch.trim().toLowerCase();
+    const isAiScan = (row.deviceId ?? "").startsWith("ai-scan");
+    const matchesSource =
+      attendanceSourceFilter === "all"
+        ? true
+        : attendanceSourceFilter === "ai"
+          ? isAiScan
+          : !isAiScan;
+
+    if (!matchesSource) {
+      return false;
+    }
+
+    if (!search) {
+      return true;
+    }
+
+    const searchable = [
+      row.participant.name,
+      row.participant.address ?? "",
+      row.participant.gender ?? "",
+      row.deviceId ?? "",
+      row.eventDate ?? "",
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return searchable.includes(search);
+  });
+
+  const totalAttendancePages = Math.max(1, Math.ceil(filteredAttendance.length / attendancePageSize));
+  const paginatedAttendance = filteredAttendance.slice(
+    (attendancePage - 1) * attendancePageSize,
+    attendancePage * attendancePageSize,
+  );
+  const attendanceStartRow = filteredAttendance.length === 0 ? 0 : (attendancePage - 1) * attendancePageSize + 1;
+  const attendanceEndRow = Math.min(filteredAttendance.length, attendancePage * attendancePageSize);
+
+  React.useEffect(() => {
+    setAttendancePage(1);
+  }, [deferredAttendanceTableSearch, attendanceSourceFilter, attendancePageSize, date, range, query]);
+
+  React.useEffect(() => {
+    if (attendancePage > totalAttendancePages) {
+      setAttendancePage(totalAttendancePages);
+    }
+  }, [attendancePage, totalAttendancePages]);
 
   const openEditAttendance = (row: AttendanceRow) => {
     setEditAttendanceTarget(row);
@@ -325,14 +379,75 @@ export default function AdminPage() {
         <section className="site-soft-card mt-7 p-5 md:p-6">
           <div className="flex items-center justify-between gap-2">
             <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">Daftar Presensi</h3>
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">Total: {data.length}</span>
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">Total: {filteredAttendance.length}</span>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_150px_auto]">
+            <div className="space-y-2">
+              <label className="site-label flex items-center gap-2">
+                <Search size={14} />
+                Cari Cepat
+              </label>
+              <Input
+                placeholder="Cari nama, alamat, device..."
+                value={attendanceTableSearch}
+                onChange={(event) => setAttendanceTableSearch(event.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="site-label flex items-center gap-2">
+                <ListFilter size={14} />
+                Filter Sumber
+              </label>
+              <select
+                className="site-select w-full"
+                value={attendanceSourceFilter}
+                onChange={(event) => setAttendanceSourceFilter(event.target.value as typeof attendanceSourceFilter)}
+              >
+                <option value="all">Semua</option>
+                <option value="manual">Manual</option>
+                <option value="ai">AI Scan</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="site-label">Baris / Halaman</label>
+              <select
+                className="site-select w-full"
+                value={attendancePageSize}
+                onChange={(event) => setAttendancePageSize(Number(event.target.value))}
+              >
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                className="w-full lg:w-auto"
+                onClick={() => {
+                  setAttendanceTableSearch("");
+                  setAttendanceSourceFilter("all");
+                  setAttendancePage(1);
+                }}
+                disabled={!attendanceTableSearch && attendanceSourceFilter === "all"}
+              >
+                Reset Filter
+              </Button>
+            </div>
           </div>
 
           <div className="mt-4 md:hidden space-y-3">
-            {data.length === 0 ? (
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">Belum ada data untuk tanggal ini.</p>
+            {paginatedAttendance.length === 0 ? (
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                {filteredAttendance.length === 0 ? "Tidak ada hasil yang cocok dengan filter." : "Belum ada data untuk halaman ini."}
+              </p>
             ) : (
-              data.map((row) => (
+              paginatedAttendance.map((row) => (
                 <div key={row.id} className="site-card-list-row space-y-2 px-4 py-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-[hsl(var(--foreground))]">{row.participant.name}</p>
@@ -376,7 +491,7 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((row) => (
+                {paginatedAttendance.map((row) => (
                   <tr key={row.id} className="border-b border-[hsl(var(--border))/0.7] last:border-b-0">
                     <td className="py-3 pr-2 font-semibold">{row.participant.name}</td>
                     <td className="py-3 pr-2 text-[hsl(var(--muted-foreground))]">
@@ -405,9 +520,40 @@ export default function AdminPage() {
                 ))}
               </tbody>
             </table>
-            {data.length === 0 ? (
-              <p className="py-4 text-sm text-[hsl(var(--muted-foreground))]">Belum ada data untuk tanggal ini.</p>
+            {paginatedAttendance.length === 0 ? (
+              <p className="py-4 text-sm text-[hsl(var(--muted-foreground))]">
+                {filteredAttendance.length === 0 ? "Tidak ada hasil yang cocok dengan filter." : "Belum ada data untuk halaman ini."}
+              </p>
             ) : null}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 border-t border-[hsl(var(--border))/0.7] pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              Menampilkan {attendanceStartRow}-{attendanceEndRow} dari {filteredAttendance.length} presensi
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAttendancePage((value) => Math.max(1, value - 1))}
+                disabled={attendancePage <= 1}
+              >
+                <ChevronLeft size={14} />
+                Sebelumnya
+              </Button>
+              <span className="min-w-[92px] text-center text-xs text-[hsl(var(--muted-foreground))]">
+                Halaman {attendancePage} / {totalAttendancePages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAttendancePage((value) => Math.min(totalAttendancePages, value + 1))}
+                disabled={attendancePage >= totalAttendancePages}
+              >
+                Berikutnya
+                <ChevronRight size={14} />
+              </Button>
+            </div>
           </div>
         </section>
 

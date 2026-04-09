@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { appendRow } from "@/lib/googleSheets";
 import { syncParticipantsFromSheetToDatabase } from "@/lib/participants-sheet-sync";
+import { normalizePersonName } from "@/lib/name-matching";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -71,9 +72,20 @@ export async function POST(req: Request) {
   }
 
   const { name, address, gender } = parsed.data;
-  const existing = await prisma.participant.findFirst({
-    where: { name: { equals: name, mode: "insensitive" } },
+  const normalizedName = normalizePersonName(name);
+  const existingCandidates = await prisma.participant.findMany({
+    where: {
+      name: {
+        contains: name.trim().slice(0, 2) || name.trim(),
+        mode: "insensitive",
+      },
+    },
   });
+  const existing =
+    existingCandidates.find((participant) => normalizePersonName(participant.name) === normalizedName) ??
+    (await prisma.participant.findFirst({
+      where: { name: { equals: name, mode: "insensitive" } },
+    }));
 
   let created = false;
   const participant =

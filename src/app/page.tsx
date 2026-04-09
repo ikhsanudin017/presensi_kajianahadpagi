@@ -8,6 +8,7 @@ import { Trash2, Calendar, UserCheck, UserPlus, RefreshCw } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { ParticipantCombobox, type Participant } from "@/components/participant-combobox";
 import { AddParticipantDialog } from "@/components/add-participant-dialog";
+import { AttendanceAiScanCard } from "@/components/attendance-ai-scan-card";
 import { SiteShell } from "@/components/site/SiteShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,13 +41,13 @@ export default function HomePage() {
 
   const refreshAttendance = React.useCallback(async () => {
     try {
-      const res = await fetch(`/api/attendance?date=${today}&limit=20`);
+      const res = await fetch(`/api/attendance?date=${sessionDate}&limit=500`);
       const data = await safeJson<{ data?: AttendanceEntry[] }>(res);
       setAttendance(data?.data ?? []);
     } catch (error) {
       console.error(error);
     }
-  }, [today]);
+  }, [sessionDate]);
 
   React.useEffect(() => {
     refreshAttendance();
@@ -80,7 +81,7 @@ export default function HomePage() {
       if (data.status === "ALREADY_PRESENT") {
         showToast({
           title: "Sudah tercatat",
-          description: `${selected.name} sudah hadir hari ini.`,
+          description: `${selected.name} sudah hadir pada ${sessionDate}.`,
         });
       } else {
         showToast({
@@ -246,13 +247,15 @@ export default function HomePage() {
               </div>
               <div className="mt-4 rounded-xl border border-border/60 bg-gradient-to-br from-muted/40 to-muted/25 px-4 py-3.5">
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  💡 <span className="font-semibold">Petunjuk:</span> Pilih peserta dari dropdown, lalu klik tombol{" "}
-                  <span className="font-bold text-[hsl(var(--primary))]">Hadir</span> untuk mencatat presensi hari ini.
+                  Tip: <span className="font-semibold">Petunjuk:</span> Pilih peserta dari dropdown, lalu klik tombol{" "}
+                  <span className="font-bold text-[hsl(var(--primary))]">Hadir</span> untuk mencatat presensi pada tanggal aktif.
                 </p>
               </div>
             </div>
           </div>
         </PageShell>
+
+        <AttendanceAiScanCard eventDate={sessionDate} deviceId={deviceId} onCompleted={refreshAttendance} />
 
         <section className="site-soft-card mt-6 p-4 sm:mt-8 sm:p-5 md:p-7">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -262,7 +265,7 @@ export default function HomePage() {
               </div>
               <div>
                 <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">
-                  Presensi Hari Ini
+                  Presensi {sessionDate}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {attendance.length} {attendance.length === 1 ? 'peserta' : 'peserta'} hadir
@@ -286,7 +289,7 @@ export default function HomePage() {
                 <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-muted/50">
                   <UserCheck size={28} className="text-muted-foreground/50" />
                 </div>
-                <p className="text-base font-semibold text-muted-foreground">Belum ada presensi hari ini</p>
+                <p className="text-base font-semibold text-muted-foreground">Belum ada presensi untuk tanggal ini</p>
                 <p className="mt-1 text-sm text-muted-foreground/70">Mulai tandai kehadiran jamaah</p>
               </div>
             ) : (

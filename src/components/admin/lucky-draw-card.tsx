@@ -14,9 +14,15 @@ type LuckyDrawParticipant = {
 
 type LuckyDrawResponse = {
   ok?: boolean;
+  selectedWeekStart?: string | null;
   sourceDate?: string | null;
   sourceDateEnd?: string | null;
   sourceSessionDates?: string[];
+  availableWeeks?: Array<{
+    weekStart: string;
+    weekEnd: string;
+    sessionDates: string[];
+  }>;
   participants?: LuckyDrawParticipant[];
   totalParticipants?: number;
   message?: string;
@@ -51,6 +57,10 @@ function getRandomParticipant(participants: LuckyDrawParticipant[]) {
 export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
   const [loading, setLoading] = React.useState(false);
   const [drawing, setDrawing] = React.useState(false);
+  const [selectedWeekStart, setSelectedWeekStart] = React.useState("");
+  const [availableWeeks, setAvailableWeeks] = React.useState<
+    Array<{ weekStart: string; weekEnd: string; sessionDates: string[] }>
+  >([]);
   const [participants, setParticipants] = React.useState<LuckyDrawParticipant[]>([]);
   const [sourceDate, setSourceDate] = React.useState<string | null>(null);
   const [sourceDateEnd, setSourceDateEnd] = React.useState<string | null>(null);
@@ -79,13 +89,17 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
     };
   }, [clearRollingTimer]);
 
-  const fetchCandidates = React.useCallback(async () => {
+  const fetchCandidates = React.useCallback(async (weekStart?: string) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/lucky-draw", { cache: "no-store" });
+      const targetWeek = weekStart?.trim() || "";
+      const query = targetWeek ? `?weekStart=${encodeURIComponent(targetWeek)}` : "";
+      const res = await fetch(`/api/admin/lucky-draw${query}`, { cache: "no-store" });
       const json = await safeJson<LuckyDrawResponse>(res);
       if (!res.ok || !json?.ok) {
+        setAvailableWeeks([]);
         setParticipants([]);
+        setSelectedWeekStart("");
         setSourceDate(null);
         setSourceDateEnd(null);
         setSourceSessionDates([]);
@@ -94,6 +108,8 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
         return;
       }
       const nextParticipants = json.participants ?? [];
+      setAvailableWeeks(json.availableWeeks ?? []);
+      setSelectedWeekStart(json.selectedWeekStart ?? "");
       setParticipants(nextParticipants);
       setSourceDate(json.sourceDate ?? null);
       setSourceDateEnd(json.sourceDateEnd ?? null);
@@ -103,6 +119,7 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
       setWinner(null);
     } catch (error) {
       console.error(error);
+      setAvailableWeeks([]);
       setParticipants([]);
       setSourceDate(null);
       setSourceDateEnd(null);
@@ -115,8 +132,8 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
   }, []);
 
   React.useEffect(() => {
-    fetchCandidates();
-  }, [fetchCandidates]);
+    fetchCandidates(selectedWeekStart || undefined);
+  }, [fetchCandidates, selectedWeekStart]);
 
   const startDraw = () => {
     if (drawing || loading || participants.length === 0) {
@@ -149,19 +166,40 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
         <div>
           <p className="site-label">Undian Hadiah</p>
           <h3 className="site-title mt-1 text-xl text-[hsl(var(--foreground))] md:text-2xl">
-            Lucky Draw Pekan Lalu
+            Lucky Draw Pilih Pekan
           </h3>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={fetchCandidates}
-          disabled={loading || drawing}
-          className="w-full gap-2 sm:w-auto"
-        >
-          <RotateCcw size={14} />
-          {loading ? "Memuat..." : "Muat Ulang Data"}
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
+          <div className="min-w-[240px] space-y-2">
+            <label className="site-label block">Pilih Pekan</label>
+            <select
+              className="site-select w-full"
+              value={selectedWeekStart}
+              onChange={(event) => setSelectedWeekStart(event.target.value)}
+              disabled={loading || drawing || availableWeeks.length === 0}
+            >
+              {availableWeeks.length === 0 ? (
+                <option value="">Belum ada pekan</option>
+              ) : (
+                availableWeeks.map((week) => (
+                  <option key={week.weekStart} value={week.weekStart}>
+                    {toIndonesiaDateLabel(week.weekStart)} - {toIndonesiaDateLabel(week.weekEnd)}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => fetchCandidates(selectedWeekStart || undefined)}
+            disabled={loading || drawing}
+            className="w-full gap-2 sm:w-auto"
+          >
+            <RotateCcw size={14} />
+            {loading ? "Memuat..." : "Muat Ulang Data"}
+          </Button>
+        </div>
       </div>
 
       <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
@@ -208,14 +246,14 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
           </Button>
           <Button
             variant="outline"
-            onClick={fetchCandidates}
+            onClick={() => fetchCandidates(selectedWeekStart || undefined)}
             disabled={loading || drawing}
             className="w-full"
           >
             Refresh Peserta
           </Button>
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            {canDraw ? `${participants.length} peserta unik siap diundi.` : "Data pekan lalu belum tersedia."}
+            {canDraw ? `${participants.length} peserta unik siap diundi.` : "Data pekan yang dipilih belum tersedia."}
           </p>
           {statusMessage ? <p className="text-xs text-[hsl(var(--muted-foreground))]">{statusMessage}</p> : null}
         </div>

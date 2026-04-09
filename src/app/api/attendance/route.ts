@@ -15,7 +15,8 @@ export async function GET(req: Request) {
   const dateParam = searchParams.get("date");
   const range = searchParams.get("range"); // last30 | year | all
   const query = searchParams.get("q")?.trim();
-  const take = Number(searchParams.get("limit") ?? "50");
+  const limitParam = searchParams.get("limit");
+  const take = limitParam ? Number(limitParam) : null;
   const id = searchParams.get("id");
 
   if (!dateParam && !range) {
@@ -46,6 +47,11 @@ export async function GET(req: Request) {
             ? { equals: eventDate }
             : undefined;
 
+  const finalTake =
+    take !== null && Number.isFinite(take)
+      ? Math.min(Math.max(Math.floor(take), 1), 500)
+      : undefined;
+
   const attendance = await prisma.attendance.findMany({
     where: {
       eventDate: whereDate,
@@ -60,7 +66,7 @@ export async function GET(req: Request) {
       participant: true,
     },
     orderBy: { createdAt: "desc" },
-    take: Number.isFinite(take) ? Math.min(take, 100) : 50,
+    take: finalTake,
   });
 
   return NextResponse.json({ ok: true, data: attendance });
