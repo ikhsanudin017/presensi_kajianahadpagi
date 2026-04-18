@@ -8,7 +8,6 @@ import { Trash2, Calendar, UserCheck, UserPlus, RefreshCw } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { ParticipantCombobox, type Participant } from "@/components/participant-combobox";
 import { AddParticipantDialog } from "@/components/add-participant-dialog";
-import { AttendanceAiScanCard } from "@/components/attendance-ai-scan-card";
 import { SiteShell } from "@/components/site/SiteShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +15,7 @@ import { useDeviceId } from "@/lib/device";
 import { safeJson } from "@/lib/http";
 import { useToast } from "@/components/ui/use-toast";
 import { PinGate } from "@/components/pin-gate";
+import { AttendanceOcrScanCard } from "@/components/attendance-ocr-scan-card";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -255,7 +255,7 @@ export default function HomePage() {
           </div>
         </PageShell>
 
-        <AttendanceAiScanCard eventDate={sessionDate} deviceId={deviceId} onCompleted={refreshAttendance} />
+        <AttendanceOcrScanCard eventDate={sessionDate} deviceId={deviceId} onCompleted={refreshAttendance} />
 
         <section className="site-soft-card mt-6 p-4 sm:mt-8 sm:p-5 md:p-7">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

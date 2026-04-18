@@ -3,7 +3,7 @@ type ScanJobStatus = "queued" | "running" | "completed" | "failed";
 export type AttendanceScanJobResult = {
   summary: {
     filesProcessed: number;
-    detectedByAi: number;
+    detectedByOcr: number;
     createdAttendance: number;
     alreadyPresent: number;
     createdParticipants: number;

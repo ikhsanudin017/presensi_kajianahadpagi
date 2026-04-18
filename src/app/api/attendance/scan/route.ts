@@ -3,12 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { toEventDate } from "@/lib/time";
 import { appendRow } from "@/lib/googleSheets";
 import { syncAttendanceSheetFromDatabase } from "@/lib/attendance-sheet-sync";
-import { scanAttendanceImagesWithAi, type AttendanceScanImageInput } from "@/lib/ai-attendance";
+import { scanAttendanceImagesWithOcr, type AttendanceScanImageInput } from "@/lib/ocr-attendance";
 import {
   findBestParticipantMatch,
   looksLikeHumanName,
   normalizePersonName,
-  sanitizeDetectedName,
   toDisplayPersonName,
 } from "@/lib/name-matching";
 import {
@@ -30,25 +29,13 @@ type ParticipantRecord = {
   createdAt: Date;
 };
 
-function toPublicScanErrorCode(error: unknown) {
-  const message = error instanceof Error ? error.message : "AI_SCAN_FAILED";
-
-  if (message.startsWith("GEMINI_TEMPORARILY_UNAVAILABLE")) {
-    return "GEMINI_TEMPORARILY_UNAVAILABLE";
-  }
-
-  return message;
-}
-
 function findExactParticipantByName(participants: ParticipantRecord[], rawName: string) {
   const normalizedTarget = normalizePersonName(rawName);
   if (!normalizedTarget) {
     return null;
   }
 
-  return (
-    participants.find((participant) => normalizePersonName(participant.name) === normalizedTarget) ?? null
-  );
+  return participants.find((participant) => normalizePersonName(participant.name) === normalizedTarget) ?? null;
 }
 
 async function createParticipant(params: {
@@ -91,72 +78,18 @@ async function createParticipant(params: {
   } satisfies ParticipantRecord;
 }
 
-function resolveParticipantFromDetection(params: {
-  participants: ParticipantRecord[];
-  resolvedName: string;
-  sourceName: string;
-  matchedExistingParticipant: boolean;
-}) {
-  const directCandidates = [params.resolvedName, params.sourceName]
-    .map((value) => sanitizeDetectedName(value))
-    .filter(Boolean);
-
-  for (const candidate of directCandidates) {
-    const exact = findExactParticipantByName(params.participants, candidate);
-    if (exact) {
-      return {
-        participant: exact,
-        method: "exact" as const,
-      };
-    }
-  }
-
-  for (const candidate of directCandidates) {
-    const fuzzy = findBestParticipantMatch(candidate, params.participants);
-    const minimumScore = params.matchedExistingParticipant ? 0.84 : 0.9;
-
-    if (fuzzy && !fuzzy.ambiguous && fuzzy.score >= minimumScore) {
-      return {
-        participant: fuzzy.participant,
-        method: fuzzy.reason,
-      };
-    }
-  }
-
-  return null;
-}
-
 function resolveParticipantBeforeCreate(params: {
   participants: ParticipantRecord[];
   proposedName: string;
 }) {
   const exact = findExactParticipantByName(params.participants, params.proposedName);
   if (exact) {
-    return {
-      participant: exact,
-      method: "exact" as const,
-      shouldCreate: false,
-      unresolvedReason: null,
-    };
+    return { participant: exact, method: "exact" as const, shouldCreate: false, unresolvedReason: null };
   }
 
   const fuzzy = findBestParticipantMatch(params.proposedName, params.participants);
-  if (fuzzy && !fuzzy.ambiguous && fuzzy.score >= 0.92) {
-    return {
-      participant: fuzzy.participant,
-      method: fuzzy.reason,
-      shouldCreate: false,
-      unresolvedReason: null,
-    };
-  }
-
-  if (fuzzy && !fuzzy.ambiguous && fuzzy.score >= 0.78) {
-    return {
-      participant: fuzzy.participant,
-      method: fuzzy.reason,
-      shouldCreate: false,
-      unresolvedReason: null,
-    };
+  if (fuzzy && !fuzzy.ambiguous && fuzzy.score >= 0.88) {
+    return { participant: fuzzy.participant, method: fuzzy.reason, shouldCreate: false, unresolvedReason: null };
   }
 
   if (fuzzy && fuzzy.score >= 0.78) {
@@ -164,16 +97,11 @@ function resolveParticipantBeforeCreate(params: {
       participant: null,
       method: null,
       shouldCreate: false,
-      unresolvedReason: `Nama "${params.proposedName}" mirip ke beberapa peserta, jadi ditahan untuk cek manual.`,
+      unresolvedReason: `Nama "${params.proposedName}" mirip beberapa peserta, jadi ditahan untuk cek manual.`,
     };
   }
 
-  return {
-    participant: null,
-    method: null,
-    shouldCreate: true,
-    unresolvedReason: null,
-  };
+  return { participant: null, method: null, shouldCreate: true, unresolvedReason: null };
 }
 
 async function runAttendanceScanJob(params: {
@@ -193,61 +121,52 @@ async function runAttendanceScanJob(params: {
       orderBy: { name: "asc" },
     })) as ParticipantRecord[];
 
-    updateAttendanceScanJob(params.jobId, {
-      status: "running",
-      progress: 12,
-      message: `Memulai analisis ${params.images.length} gambar...`,
-    });
-
-    const aiResult = await scanAttendanceImagesWithAi({
+    const ocrResult = await scanAttendanceImagesWithOcr({
       images: params.images,
       participants,
       onProgress: ({ progress, message }) => {
-        updateAttendanceScanJob(params.jobId, {
-          status: "running",
-          progress,
-          message,
-        });
+        updateAttendanceScanJob(params.jobId, { status: "running", progress, message });
       },
     });
 
-    const warnings = [...aiResult.notes];
+    const warnings = [...ocrResult.notes];
     const processedResults: AttendanceScanJobResult["results"] = [];
-    const unresolved = [...aiResult.skipped];
+    const unresolved = [...ocrResult.skipped];
     const participantSeenInUpload = new Set<string>();
-    const scanDeviceId = params.deviceId ? `ai-scan:${params.deviceId}` : "ai-scan";
+    const scanDeviceId = params.deviceId ? `ocr-scan:${params.deviceId}` : "ocr-scan";
     let createdParticipants = 0;
     let createdAttendance = 0;
     let alreadyPresent = 0;
     let duplicateInUpload = 0;
-    const totalCandidates = Math.max(aiResult.attendees.length, 1);
+    const totalCandidates = Math.max(ocrResult.attendees.length, 1);
 
-    for (let index = 0; index < aiResult.attendees.length; index += 1) {
-      const candidate = aiResult.attendees[index];
+    for (let index = 0; index < ocrResult.attendees.length; index += 1) {
+      const candidate = ocrResult.attendees[index];
       updateAttendanceScanJob(params.jobId, {
         status: "running",
-        progress: 68 + (index / totalCandidates) * 24,
-        message: `Menyimpan hasil ${index + 1} dari ${aiResult.attendees.length}...`,
+        progress: 66 + (index / totalCandidates) * 28,
+        message: `Menyimpan hasil ${index + 1} dari ${ocrResult.attendees.length}...`,
       });
 
-      const resolved = resolveParticipantFromDetection({
-        participants,
-        resolvedName: candidate.resolvedName,
-        sourceName: candidate.sourceName,
-        matchedExistingParticipant: candidate.matchedExistingParticipant,
-      });
-
-      let participant = resolved?.participant ?? null;
+      let participant =
+        findExactParticipantByName(participants, candidate.resolvedName) ??
+        findBestParticipantMatch(candidate.resolvedName, participants)?.participant ??
+        null;
       let participantStatus: "EXISTING" | "CREATED" = "EXISTING";
-      let resolutionMethod: "exact" | "phonetic" | "fuzzy" | "created" = resolved?.method ?? "created";
+      let resolutionMethod: "exact" | "phonetic" | "fuzzy" | "created" =
+        participant && normalizePersonName(participant.name) === normalizePersonName(candidate.resolvedName)
+          ? "exact"
+          : participant
+            ? "fuzzy"
+            : "created";
 
       if (!participant) {
         const proposedName = toDisplayPersonName(candidate.resolvedName || candidate.sourceName);
         if (!looksLikeHumanName(proposedName)) {
           unresolved.push({
             pageNumber: candidate.pageNumber,
-            sourceName: candidate.sourceName || candidate.resolvedName || `halaman-${candidate.pageNumber}`,
-            reason: "Nama belum terlihat cukup jelas sebagai nama orang, jadi peserta tidak dibuat otomatis.",
+            sourceName: candidate.sourceName || proposedName,
+            reason: "Nama belum cukup jelas untuk membuat peserta baru otomatis.",
           });
           continue;
         }
@@ -264,7 +183,7 @@ async function runAttendanceScanJob(params: {
         } else if (!reuseDecision.shouldCreate) {
           unresolved.push({
             pageNumber: candidate.pageNumber,
-            sourceName: candidate.sourceName || candidate.resolvedName || proposedName,
+            sourceName: candidate.sourceName || proposedName,
             reason: reuseDecision.unresolvedReason ?? "Nama terlalu mirip dengan peserta yang sudah ada.",
           });
           continue;
@@ -272,10 +191,9 @@ async function runAttendanceScanJob(params: {
       }
 
       if (!participant) {
-        const proposedName = toDisplayPersonName(candidate.resolvedName || candidate.sourceName);
         participant = await createParticipant({
           participants,
-          resolvedName: proposedName,
+          resolvedName: toDisplayPersonName(candidate.resolvedName || candidate.sourceName),
           addressHint: candidate.addressHint,
           warnings,
         });
@@ -349,15 +267,9 @@ async function runAttendanceScanJob(params: {
       });
     }
 
-    updateAttendanceScanJob(params.jobId, {
-      status: "running",
-      progress: 95,
-      message: "Menyinkronkan data presensi...",
-    });
-
     if (createdAttendance > 0) {
       const syncResult = await syncAttendanceSheetFromDatabase().catch((error) => {
-        console.error("Failed to sync attendance sheet after AI scan", error);
+        console.error("Failed to sync attendance sheet after OCR scan", error);
         return { ok: false } as const;
       });
 
@@ -366,40 +278,32 @@ async function runAttendanceScanJob(params: {
       }
     }
 
-    const result: AttendanceScanJobResult = {
-      summary: {
-        filesProcessed: params.images.length,
-        detectedByAi: aiResult.attendees.length,
-        createdAttendance,
-        alreadyPresent,
-        createdParticipants,
-        duplicateInUpload,
-        unresolved: unresolved.length,
-      },
-      results: processedResults,
-      unresolved,
-      warnings: Array.from(new Set(warnings)),
-    };
-
     updateAttendanceScanJob(params.jobId, {
       status: "completed",
       progress: 100,
       message: "Scan selesai.",
-      result,
+      result: {
+        summary: {
+          filesProcessed: params.images.length,
+          detectedByOcr: ocrResult.attendees.length,
+          createdAttendance,
+          alreadyPresent,
+          createdParticipants,
+          duplicateInUpload,
+          unresolved: unresolved.length,
+        },
+        results: processedResults,
+        unresolved,
+        warnings: Array.from(new Set(warnings)),
+      },
     });
   } catch (error) {
-    console.error("AI attendance scan failed", error);
-    const publicErrorCode = toPublicScanErrorCode(error);
-    const publicMessage =
-      publicErrorCode === "GEMINI_TEMPORARILY_UNAVAILABLE"
-        ? "Gemini sedang sibuk. Sistem sudah mencoba ulang beberapa kali."
-        : "Scan gagal.";
-
+    console.error("OCR attendance scan failed", error);
     updateAttendanceScanJob(params.jobId, {
       status: "failed",
       progress: 100,
-      message: publicMessage,
-      error: publicErrorCode,
+      message: "Scan gagal.",
+      error: error instanceof Error ? error.message : "OCR_SCAN_FAILED",
     });
   }
 }
@@ -417,10 +321,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "JOB_NOT_FOUND" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    ok: true,
-    data: job,
-  });
+  return NextResponse.json({ ok: true, data: job });
 }
 
 export async function POST(req: Request) {
@@ -428,16 +329,18 @@ export async function POST(req: Request) {
     const formData = await req.formData();
     const eventDateValue = String(formData.get("eventDate") ?? "").trim();
     const deviceId = String(formData.get("deviceId") ?? "").trim();
-    const eventDate = /^\d{4}-\d{2}-\d{2}$/.test(eventDateValue)
-      ? toEventDate(eventDateValue)
-      : toEventDate();
-
-    const files = formData
-      .getAll("images")
-      .filter((item): item is File => item instanceof File && item.size > 0);
+    const eventDate = /^\d{4}-\d{2}-\d{2}$/.test(eventDateValue) ? toEventDate(eventDateValue) : toEventDate();
+    const files = formData.getAll("images").filter((item): item is File => item instanceof File && item.size > 0);
 
     if (files.length === 0) {
       return NextResponse.json({ ok: false, error: "IMAGE_REQUIRED" }, { status: 400 });
+    }
+
+    if (files.length > 6) {
+      return NextResponse.json(
+        { ok: false, error: "TOO_MANY_IMAGES", detail: "Maksimal 6 gambar per scan agar proses tetap cepat." },
+        { status: 400 },
+      );
     }
 
     const images = await Promise.all(
@@ -462,22 +365,9 @@ export async function POST(req: Request) {
       images,
     });
 
-    return NextResponse.json(
-      {
-        ok: true,
-        jobId: job.id,
-      },
-      { status: 202 },
-    );
+    return NextResponse.json({ ok: true, jobId: job.id }, { status: 202 });
   } catch (error) {
-    console.error("Failed to start AI attendance scan", error);
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "AI_SCAN_START_FAILED",
-        detail: error instanceof Error ? error.message : "UNKNOWN_ERROR",
-      },
-      { status: 500 },
-    );
+    console.error("Failed to start OCR attendance scan", error);
+    return NextResponse.json({ ok: false, error: "OCR_SCAN_START_FAILED" }, { status: 500 });
   }
 }

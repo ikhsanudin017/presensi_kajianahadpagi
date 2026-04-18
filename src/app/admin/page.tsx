@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 import * as React from "react";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
-import { PenLine, Trash2, ChevronDown, Search, ListFilter, ChevronLeft, ChevronRight } from "lucide-react";
+import { PenLine, Trash2, ChevronDown, Search, ListFilter, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { PinGate } from "@/components/pin-gate";
 import { SiteShell } from "@/components/site/SiteShell";
@@ -150,7 +150,7 @@ export default function AdminPage() {
 
   const filteredAttendance = data.filter((row) => {
     const search = deferredAttendanceTableSearch.trim().toLowerCase();
-    const isAiScan = (row.deviceId ?? "").startsWith("ai-scan");
+    const isAiScan = ["ai-scan", "ocr-scan"].some((prefix) => (row.deviceId ?? "").startsWith(prefix));
     const matchesSource =
       attendanceSourceFilter === "all"
         ? true
@@ -180,12 +180,45 @@ export default function AdminPage() {
   });
 
   const totalAttendancePages = Math.max(1, Math.ceil(filteredAttendance.length / attendancePageSize));
-  const paginatedAttendance = filteredAttendance.slice(
+  // Sort by eventDate for grouped display in multi-date modes
+  const sortedFilteredAttendance = React.useMemo(() => {
+    if (range === "single") return filteredAttendance;
+    return [...filteredAttendance].sort((a, b) => {
+      const dateA = a.eventDate ?? a.createdAt.slice(0, 10);
+      const dateB = b.eventDate ?? b.createdAt.slice(0, 10);
+      return dateB.localeCompare(dateA);
+    });
+  }, [filteredAttendance, range]);
+
+  const paginatedAttendance = sortedFilteredAttendance.slice(
     (attendancePage - 1) * attendancePageSize,
     attendancePage * attendancePageSize,
   );
   const attendanceStartRow = filteredAttendance.length === 0 ? 0 : (attendancePage - 1) * attendancePageSize + 1;
   const attendanceEndRow = Math.min(filteredAttendance.length, attendancePage * attendancePageSize);
+
+  const dateGroupCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of sortedFilteredAttendance) {
+      const d = row.eventDate ?? row.createdAt.slice(0, 10);
+      counts.set(d, (counts.get(d) ?? 0) + 1);
+    }
+    return counts;
+  }, [sortedFilteredAttendance]);
+
+  const formatDateGroupLabel = React.useCallback((dateString: string) => {
+    // Handle both ISO strings (2026-04-17T00:00:00.000Z) and plain dates (2026-04-17)
+    const dateOnly = dateString.slice(0, 10);
+    const parsed = new Date(`${dateOnly}T00:00:00+07:00`);
+    if (Number.isNaN(parsed.getTime())) return dateString;
+    return new Intl.DateTimeFormat("id-ID", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Asia/Jakarta",
+    }).format(parsed);
+  }, []);
 
   React.useEffect(() => {
     setAttendancePage(1);
@@ -447,35 +480,51 @@ export default function AdminPage() {
                 {filteredAttendance.length === 0 ? "Tidak ada hasil yang cocok dengan filter." : "Belum ada data untuk halaman ini."}
               </p>
             ) : (
-              paginatedAttendance.map((row) => (
-                <div key={row.id} className="site-card-list-row space-y-2 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-[hsl(var(--foreground))]">{row.participant.name}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                      {row.participant.address ?? "Alamat tidak tersedia"} - {row.participant.gender ?? "N/A"}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
-                    <span>{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</span>
-                    <span className="max-w-[46vw] truncate">Device: {row.deviceId ?? "-"}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditAttendance(row)}>
-                      <PenLine size={14} /> Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
-                      onClick={() => deleteAttendance(row)}
-                      disabled={deleteAttendanceId === row.id}
-                    >
-                      <Trash2 size={14} />
-                      {deleteAttendanceId === row.id ? "Menghapus..." : "Hapus"}
-                    </Button>
-                  </div>
-                </div>
-              ))
+              paginatedAttendance.map((row, _rowIdx) => {
+                const eventDate = row.eventDate ?? row.createdAt.slice(0, 10);
+                const prevEventDate = _rowIdx > 0
+                  ? (paginatedAttendance[_rowIdx - 1].eventDate ?? paginatedAttendance[_rowIdx - 1].createdAt.slice(0, 10))
+                  : null;
+                const showDateHeader = range !== "single" && eventDate !== prevEventDate;
+                return (
+                  <React.Fragment key={row.id}>
+                    {showDateHeader && (
+                      <div className="flex items-center gap-2.5 rounded-xl border border-primary/25 bg-gradient-to-r from-primary/10 to-primary/5 px-4 py-2.5">
+                        <Calendar size={15} className="text-primary" />
+                        <span className="text-sm font-bold text-[hsl(var(--foreground))]">{formatDateGroupLabel(eventDate)}</span>
+                        <span className="ml-auto rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-bold text-primary">{dateGroupCounts.get(eventDate) ?? 0} hadir</span>
+                      </div>
+                    )}
+                    <div className="site-card-list-row space-y-2 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-[hsl(var(--foreground))]">{row.participant.name}</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                          {row.participant.address ?? "Alamat tidak tersedia"} - {row.participant.gender ?? "N/A"}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+                        <span>{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</span>
+                        <span className="max-w-[46vw] truncate">Device: {row.deviceId ?? "-"}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditAttendance(row)}>
+                          <PenLine size={14} /> Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
+                          onClick={() => deleteAttendance(row)}
+                          disabled={deleteAttendanceId === row.id}
+                        >
+                          <Trash2 size={14} />
+                          {deleteAttendanceId === row.id ? "Menghapus..." : "Hapus"}
+                        </Button>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })
             )}
           </div>
 
@@ -491,33 +540,53 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedAttendance.map((row) => (
-                  <tr key={row.id} className="border-b border-[hsl(var(--border))/0.7] last:border-b-0">
-                    <td className="py-3 pr-2 font-semibold">{row.participant.name}</td>
-                    <td className="py-3 pr-2 text-[hsl(var(--muted-foreground))]">
-                      {(row.participant.address ?? "Alamat tidak tersedia") + " - " + (row.participant.gender ?? "N/A")}
-                    </td>
-                    <td className="py-3 pr-2">{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</td>
-                    <td className="max-w-[220px] truncate py-3 pr-2 text-[hsl(var(--muted-foreground))]">{row.deviceId ?? "-"}</td>
-                    <td className="py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditAttendance(row)}>
-                          <PenLine size={14} /> Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
-                          onClick={() => deleteAttendance(row)}
-                          disabled={deleteAttendanceId === row.id}
-                        >
-                          <Trash2 size={14} />
-                          {deleteAttendanceId === row.id ? "Menghapus..." : "Hapus"}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {paginatedAttendance.map((row, _rowIdx) => {
+                  const eventDate = row.eventDate ?? row.createdAt.slice(0, 10);
+                  const prevEventDate = _rowIdx > 0
+                    ? (paginatedAttendance[_rowIdx - 1].eventDate ?? paginatedAttendance[_rowIdx - 1].createdAt.slice(0, 10))
+                    : null;
+                  const showDateHeader = range !== "single" && eventDate !== prevEventDate;
+                  return (
+                    <React.Fragment key={row.id}>
+                      {showDateHeader && (
+                        <tr>
+                          <td colSpan={5} className="px-0 pb-1 pt-4">
+                            <div className="flex items-center gap-2.5 rounded-lg border border-primary/25 bg-gradient-to-r from-primary/10 to-primary/5 px-3.5 py-2">
+                              <Calendar size={14} className="text-primary" />
+                              <span className="text-xs font-bold text-[hsl(var(--foreground))]">{formatDateGroupLabel(eventDate)}</span>
+                              <span className="ml-auto rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-bold text-primary">{dateGroupCounts.get(eventDate) ?? 0} hadir</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      <tr className="border-b border-[hsl(var(--border))/0.7] last:border-b-0">
+                        <td className="py-3 pr-2 font-semibold">{row.participant.name}</td>
+                        <td className="py-3 pr-2 text-[hsl(var(--muted-foreground))]">
+                          {(row.participant.address ?? "Alamat tidak tersedia") + " - " + (row.participant.gender ?? "N/A")}
+                        </td>
+                        <td className="py-3 pr-2">{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</td>
+                        <td className="max-w-[220px] truncate py-3 pr-2 text-[hsl(var(--muted-foreground))]">{row.deviceId ?? "-"}</td>
+                        <td className="py-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditAttendance(row)}>
+                              <PenLine size={14} /> Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="gap-1 text-[hsl(var(--danger))] hover:text-[hsl(var(--danger))]"
+                              onClick={() => deleteAttendance(row)}
+                              disabled={deleteAttendanceId === row.id}
+                            >
+                              <Trash2 size={14} />
+                              {deleteAttendanceId === row.id ? "Menghapus..." : "Hapus"}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
             {paginatedAttendance.length === 0 ? (
