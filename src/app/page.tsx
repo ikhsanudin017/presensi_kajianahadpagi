@@ -255,7 +255,12 @@ export default function HomePage() {
           </div>
         </PageShell>
 
-        <AttendanceOcrScanCard eventDate={sessionDate} deviceId={deviceId} onCompleted={refreshAttendance} />
+        <AttendanceOcrScanCard
+          eventDate={sessionDate}
+          deviceId={deviceId}
+          onCompleted={refreshAttendance}
+          onDetectedDate={setSessionDate}
+        />
 
         <section className="site-soft-card mt-6 p-4 sm:mt-8 sm:p-5 md:p-7">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -4,30 +4,56 @@ export type AttendanceScanJobResult = {
   summary: {
     filesProcessed: number;
     detectedByOcr: number;
-    createdAttendance: number;
+    readyToSave: number;
+    reviewRequired: number;
     alreadyPresent: number;
-    createdParticipants: number;
-    duplicateInUpload: number;
+    duplicateInScan: number;
     unresolved: number;
   };
-  results: Array<{
+  structured: {
+    displayDate: string | null;
+    detectedEventDate: string | null;
+    previewText: string;
+  };
+  reviewItems: Array<{
+    id: string;
     pageNumber: number;
+    rowNumber?: number;
     sourceName: string;
     participantName: string;
     participantId: string;
-    participantStatus: "EXISTING" | "CREATED";
-    attendanceStatus: "CREATED" | "ALREADY_PRESENT" | "DUPLICATE_IN_UPLOAD";
     confidence: "high" | "medium" | "low";
-    resolutionMethod: "exact" | "phonetic" | "fuzzy" | "created";
+    resolutionMethod: "exact" | "phonetic" | "fuzzy" | "roster";
+    matchScore?: number;
+    saveStatus: "READY" | "REVIEW_REQUIRED" | "ALREADY_PRESENT" | "DUPLICATE_IN_SCAN";
+    selectedByDefault: boolean;
     reason: string;
   }>;
   unresolved: Array<{
     pageNumber: number;
+    rowNumber?: number;
     sourceName: string;
     reason: string;
   }>;
   warnings: string[];
+  blocked: boolean;
 };
+
+export type AttendanceScanConfirmResult = {
+  summary: {
+    requested: number;
+    alreadyPresent: number;
+    createdAttendance: number;
+    skipped: number;
+  };
+  results: Array<{
+    participantName: string;
+    participantId: string;
+    attendanceStatus: "CREATED" | "ALREADY_PRESENT" | "SKIPPED";
+    reason: string;
+  }>;
+  warnings: string[];
+}
 
 export type AttendanceScanJob = {
   id: string;
