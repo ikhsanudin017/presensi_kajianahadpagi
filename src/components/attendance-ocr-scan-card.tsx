@@ -38,7 +38,7 @@ type ScanReviewItem = {
   participantName: string;
   participantId: string;
   confidence: "high" | "medium" | "low";
-  resolutionMethod: "exact" | "phonetic" | "fuzzy" | "roster";
+  resolutionMethod: "exact" | "phonetic" | "fuzzy" | "roster" | "new";
   matchScore?: number;
   saveStatus: "READY" | "REVIEW_REQUIRED" | "ALREADY_PRESENT" | "DUPLICATE_IN_SCAN";
   selectedByDefault: boolean;
@@ -221,6 +221,14 @@ function statusLabel(status: ScanReviewItem["saveStatus"]) {
   return "Duplikat Scan";
 }
 
+function resolutionMethodLabel(method: ScanReviewItem["resolutionMethod"]) {
+  if (method === "new") return "peserta baru";
+  if (method === "roster") return "roster";
+  if (method === "phonetic") return "bunyi";
+  if (method === "fuzzy") return "kemiripan";
+  return "cocok persis";
+}
+
 function confidenceLabel(confidence: ScanReviewItem["confidence"]) {
   if (confidence === "high") return "Tinggi";
   if (confidence === "medium") return "Sedang";
@@ -339,6 +347,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
       }
 
       const nextResult = normalizeScanResponseData(finalResult);
+      const defaultSelectedCount = (nextResult?.reviewItems ?? []).filter((item) => item.selectedByDefault).length;
       setResult(nextResult);
       setSelectedIds((nextResult?.reviewItems ?? []).filter((item) => item.selectedByDefault).map((item) => item.id));
       setFiles([]);
@@ -348,7 +357,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
         title: "Scan selesai",
         description: finalResult.blocked
           ? "Hasil ada, tetapi belum cukup yakin untuk dipilih otomatis."
-          : `${finalResult.summary.readyToSave} kandidat siap disimpan setelah review.`,
+          : `${defaultSelectedCount} kandidat dari ringkasan dipilih untuk disimpan setelah review.`,
       });
     } catch (error) {
       console.error(error);
@@ -597,25 +606,6 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
 
       {normalizedResult ? (
         <div className="mt-5 space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-border/70 bg-card/60 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Siap Simpan</p>
-              <p className="mt-2 text-2xl font-bold text-[hsl(var(--foreground))]">{normalizedResult.summary.readyToSave}</p>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-card/60 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Perlu Review</p>
-              <p className="mt-2 text-2xl font-bold text-[hsl(var(--foreground))]">{normalizedResult.summary.reviewRequired}</p>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-card/60 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Sudah Hadir</p>
-              <p className="mt-2 text-2xl font-bold text-[hsl(var(--foreground))]">{normalizedResult.summary.alreadyPresent}</p>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-card/60 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Belum Terbaca Jelas</p>
-              <p className="mt-2 text-2xl font-bold text-[hsl(var(--foreground))]">{normalizedResult.summary.unresolved}</p>
-            </div>
-          </div>
-
           {normalizedResult.warnings.length > 0 ? (
             <div className="rounded-2xl border border-amber-400/40 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
               <div className="flex items-start gap-2">
@@ -670,7 +660,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
                 ) : null}
               </div>
               {normalizedResult.structured.previewText ? (
-                <pre className="mt-3 max-h-64 overflow-auto rounded-xl border border-border/60 bg-background/70 px-4 py-3 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                <pre className="mt-3 max-h-44 overflow-auto rounded-xl border border-border/60 bg-background/70 px-4 py-3 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap sm:max-h-52">
                   {normalizedResult.structured.previewText}
                 </pre>
               ) : null}
@@ -692,19 +682,19 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
                     onClick={() =>
                       setSelectedIds(
                         normalizedResult.reviewItems
-                          .filter((item) => item.saveStatus === "READY")
+                          .filter((item) => item.saveStatus === "READY" || item.saveStatus === "REVIEW_REQUIRED")
                           .map((item) => item.id),
                       )
                     }
                   >
-                    Pilih Siap Simpan
+                    Pilih Semua Review
                   </Button>
                   <Button variant="ghost" size="sm" type="button" onClick={() => setSelectedIds([])}>
                     Kosongkan
                   </Button>
                 </div>
               </div>
-              <div className="space-y-2.5">
+              <div className="max-h-[28rem] space-y-2.5 overflow-y-auto pr-1">
                 {normalizedResult.reviewItems.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Belum ada kandidat peserta yang bisa direview.</p>
                 ) : (
@@ -748,7 +738,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
                             Terdeteksi sebagai: <span className="font-medium text-[hsl(var(--foreground))]">{item.sourceName}</span>
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Metode: <span className="font-medium text-[hsl(var(--foreground))]">{item.resolutionMethod}</span>
+                            Metode: <span className="font-medium text-[hsl(var(--foreground))]">{resolutionMethodLabel(item.resolutionMethod)}</span>
                             {typeof item.matchScore === "number" ? ` • skor ${item.matchScore.toFixed(2)}` : ""}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">{item.reason}</p>
@@ -765,7 +755,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
                 <AlertTriangle size={16} className="text-amber-600" />
                 <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Perlu Cek Manual</p>
               </div>
-              <div className="space-y-2.5">
+              <div className="max-h-[28rem] space-y-2.5 overflow-y-auto pr-1">
                 {normalizedResult.unresolved.length === 0 ? (
                   <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-3 text-sm text-emerald-700">
                     <div className="flex items-center gap-2">

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toEventDate } from "@/lib/time";
 import { syncAttendanceSheetFromDatabase } from "@/lib/attendance-sheet-sync";
+import { appendRow } from "@/lib/googleSheets";
 import {
   scanAttendanceImagesWithOcr,
   type AttendanceScanImageInput,
@@ -39,58 +40,262 @@ type ParticipantRecord = {
 
 type ReviewSaveStatus = AttendanceScanJobResult["reviewItems"][number]["saveStatus"];
 
+const NEW_PARTICIPANT_ID_PREFIX = "new:";
+
 const PRIORITY_ATTENDANCE_ROSTER = [
-  "Dina A",
-  "Yuli Maryani",
-  "Sutarni",
-  "Sukiyem",
-  "Amirantika",
-  "Kania Adelia P",
-  "Sutarinem",
-  "Indri",
-  "Endah Ning",
-  "Muti",
-  "Sukinah",
-  "Sari",
-  "Tari",
+  { sourceName: "Dina A", participantName: "Dina Agustina", aliases: ["Dina A", "Dina A.", "Dina Agustina"] },
+  { sourceName: "Yuli Maryani", participantName: "Yuli Maryani", aliases: ["Yuli Maryani"] },
+  { sourceName: "Sutarni", participantName: "Sutarni", aliases: ["Sutarni"] },
+  { sourceName: "Sukiyem", participantName: "Sugiyem", aliases: ["Sukiyem", "Sugiyem", "Sukijem"] },
+  { sourceName: "Amirantika", participantName: "Amirantika", aliases: ["Amirantika"] },
+  { sourceName: "Kania Adelia P", participantName: "Kania Adelia", aliases: ["Kania Adelia P", "Kania Adelia"] },
+  { sourceName: "Sutarinean", participantName: "Surarinen", aliases: ["Sutarinean", "Sutarinem", "Surarinem", "Surarinen"] },
+  { sourceName: "Indri", participantName: "Indri", aliases: ["Indri"] },
+  { sourceName: "Endah Ning", participantName: "Endah Ning", aliases: ["Endah Ning", "Endah Nin"] },
+  { sourceName: "Muti", participantName: "Muti", aliases: ["Muti", "MUTI"] },
+  { sourceName: "Sukinah", participantName: "Sukinah", aliases: ["Sukinah", "SUKINAH", "SUKINAH H"] },
+  { sourceName: "Sari", participantName: "Sari", aliases: ["Sari"] },
+  { sourceName: "Tari", participantName: "Tari", aliases: ["Tari"] },
+  { sourceName: "Arnita", participantName: "Arnita", aliases: ["Arnita"] },
+  { sourceName: "Sri in", participantName: "Sri In", aliases: ["Sri in", "Sri In"] },
+  { sourceName: "Witri", participantName: "B. Witri", aliases: ["Witri", "B Witri", "B. Witri"] },
+  { sourceName: "Tami", participantName: "Tami", aliases: ["Tami"] },
+  { sourceName: "Wawah", participantName: "Wawah", aliases: ["Wawah"] },
+  { sourceName: "Nova", participantName: "Nova", aliases: ["Nova"] },
+  { sourceName: "Bilal", participantName: "Bilal", aliases: ["Bilal"] },
+  { sourceName: "Ika", participantName: "Ika", aliases: ["Ika"] },
+  { sourceName: "Tukini", participantName: "Tukini", aliases: ["Tukini"] },
+  { sourceName: "Hasbi", participantName: "Hasbi", aliases: ["Hasbi"] },
+  { sourceName: "Wagiyem", participantName: "Wagiyem", aliases: ["Wagiyem"] },
+  { sourceName: "Liana", participantName: "Liana", aliases: ["Liana", "LIANA", "Liania"] },
+  { sourceName: "Sri Ruki", participantName: "Sri Ruwi", aliases: ["Sri Ruki", "SRI RUKI", "Sri Ruwi"] },
+  { sourceName: "Sulasmi", participantName: "Sulasmi", aliases: ["Sulasmi", "Sulami"] },
+  { sourceName: "Mariyem", participantName: "Mariyem", aliases: ["Mariyem", "Marikan", "Marikam"] },
+  { sourceName: "Mulyati", participantName: "Mulyati", aliases: ["Mulyati", "Mulkati"] },
+  { sourceName: "Mulyani", participantName: "Mulyani", aliases: ["Mulyani", "Mulfani"] },
+  { sourceName: "Yuni", participantName: "Yuni", aliases: ["Yuni"] },
+  { sourceName: "Mutia", participantName: "Mukia", aliases: ["Mutia", "Mukia"] },
+  { sourceName: "Fani", participantName: "Fani", aliases: ["Fani"] },
+  { sourceName: "Shinta", participantName: "Shinta", aliases: ["Shinta", "Shnta"] },
+  { sourceName: "Painem", participantName: "Painem", aliases: ["Painem"] },
+  { sourceName: "Muryani", participantName: "Sri Muryani", aliases: ["Muryani", "Sri Muryani"] },
+  { sourceName: "Dewi", participantName: "Dewi", aliases: ["Dewi", "Darmi", "Darni"] },
+  { sourceName: "Chasna", participantName: "Chasna", aliases: ["Chasna", "Charna"] },
+  { sourceName: "Marno", participantName: "Marno", aliases: ["Marno"] },
+  { sourceName: "Harso Surip", participantName: "Harso Surip", aliases: ["Harso Surip", "Harso"] },
+  { sourceName: "Parto Sarinah", participantName: "Parto Sahinah", aliases: ["Parto Sarinah", "Parto Sahinah", "Parjo"] },
+] as const;
+
+const MASTER_ATTENDANCE_ROSTER = [
+  "Rini",
+  "Ngatinem",
+  "Mitri",
+  "Tati",
+  "Yanti",
+  "Tini",
+  "Minem",
+  "Jumini",
   "Arnita",
-  "Sri In",
-  "Witri",
-  "Tami",
-  "Wawah",
-  "Nova",
-  "Bilal",
-  "Ika",
-  "Tukini",
-  "Hasbi",
+  "Mariyem",
+  "Sri",
+  "Supartini",
+  "Tri",
+  "Tarwini",
+  "Partinah",
+  "Hindun",
+  "Liana",
+  "Tarsih",
+  "Tri yani",
   "Wagiyem",
-  "Liania",
-  "Sri Ruki",
-  "Sulasmi",
-  "Mariham",
-  "Mulyati",
-  "Mulyani",
-  "Yuni",
-  "Mutia",
-  "Fani",
-  "Shinta",
-  "Painem",
-  "Muryani",
-  "Desi",
-  "Chasna",
+  "Minah",
+  "Sihyem",
+  "Samto",
+  "Partinah",
   "Marno",
-  "Harso Surip",
-  "Parto Sarinah",
+  "Parto",
+  "Warti",
+  "Salinem",
+  "Saliyem",
+  "Tuginem",
+  "Kariyem",
+  "Sri Muryani",
+  "Sovi",
+  "Sri Ruwi",
+  "Sulastri",
+  "Manikem",
+  "Suranti",
+  "Sugiyem",
+  "Suginem",
+  "Sri Slamet",
+  "Reti",
+  "Siti Wafiah",
+  "Arul",
+  "Kasiyem",
+  "Suratin",
+  "Sakinah",
+  "Murniyati",
+  "Yatin",
+  "Muji Nurkhasanah",
+  "Endah Ning",
+  "Mbah Surip",
+  "Ngadiyem",
+  "B. Ngatinem",
+  "Kania Adelia",
+  "Amirantika",
+  "Siti",
+  "Neli",
+  "Sutarni",
+  "Wignyo",
+  "C. Esti Purwati",
+  "Marini",
+  "Bu Sutri",
+  "Bu Marni",
+  "Bu Mis",
+  "Bu Tri Sagini",
+  "Sari",
+  "Atun",
+  "Lestari",
+  "Mulyati",
+  "Marini",
+  "Wulan",
+  "B. Dani",
+  "Tanti",
+  "Tri",
+  "B. Muryani",
+  "Suliyem",
+  "Rusmi",
+  "Umi",
+  "Soppa",
+  "Isna",
+  "Afriyah",
+  "Mbah Man",
+  "Ika",
+  "Mb Dewi",
+  "Mb Tami",
+  "Mb Erni",
+  "Aska",
+  "Neo",
+  "Bilal",
+  "Chasna",
+  "Reni",
+  "Zea",
+  "Dina Agustina",
+  "Yuli Maryani",
+  "Tini",
+  "Marsih",
+  "Ira",
+  "Sofa",
+  "Suwati",
+  "Yatmi",
+  "Tukini",
+  "SabIni",
+  "Dora",
+  "Mauren",
+  "Ika",
+  "Fatiya",
+  "Nita",
+  "Rini",
+  "Mbah Surip",
+  "Dewi",
+  "Kris",
+  "Niken",
+  "Mbh Kenceng",
+  "Deka",
+  "Krismo",
+  "Reguh",
+  "Aziz",
+  "Jamal",
+  "Jamil",
+  "Abdulah MarIyo",
+  "Upik",
+  "Kumari",
+  "Bp Tukijan",
+  "Andri",
+  "Hidayat",
+  "Hamdani",
+  "Mulyono",
+  "Basuki",
+  "Maryadi",
+  "Sutarto",
+  "Sri",
+  "Kevin",
+  "Attaya",
+  "Arfan",
+  "Widodo",
+  "Purwanto",
+  "Marino",
+  "Mari",
+  "Sugino",
+  "Sarjono",
+  "Ihsan",
+  "BOim",
+  "Kholil",
+  "Nugroho",
+  "Bojonane Isni",
+  "Heri",
+  "Mujib",
+  "Lukman",
+  "Sutiyo",
+  "Manto",
+  "Tumpak",
+  "Warsito",
+  "Mbh Kendo",
+  "Dwi",
+  "Sucipto",
+  "Minto",
+  "Yulianto",
+  "Sugeng",
+  "Kusmanto",
+  "Intarto",
+  "Jumiono",
+  "Suryono",
+  "Sulamto",
+  "Ambar",
+  "Tulus",
+  "Hartanto",
+  "Suroto",
+  "Dani",
+  "Ridwan",
 ] as const;
 
 const DETECTED_CONFIDENCE_SCORE = { high: 3, medium: 2, low: 1 } as const;
 
-function getPriorityRosterName(rowNumber?: number) {
+type PriorityRosterEntry = (typeof PRIORITY_ATTENDANCE_ROSTER)[number];
+
+function getPriorityRosterEntry(rowNumber?: number): PriorityRosterEntry | null {
   if (!rowNumber || rowNumber < 1) {
     return null;
   }
 
   return PRIORITY_ATTENDANCE_ROSTER[rowNumber - 1] ?? null;
+}
+
+function getPriorityRosterName(rowNumber?: number) {
+  return getPriorityRosterEntry(rowNumber)?.participantName ?? null;
+}
+
+function getMasterRosterName(rowNumber?: number) {
+  if (!rowNumber || rowNumber < 1) {
+    return null;
+  }
+
+  return MASTER_ATTENDANCE_ROSTER[rowNumber - 1] ?? null;
+}
+
+function getMasterRosterOccurrenceIndex(rowNumber: number, rosterName: string) {
+  const normalizedTarget = normalizePersonName(rosterName);
+  if (!normalizedTarget) {
+    return 0;
+  }
+
+  let occurrenceIndex = 0;
+  for (let currentRow = 1; currentRow < rowNumber; currentRow += 1) {
+    if (normalizePersonName(getMasterRosterName(currentRow) ?? "") === normalizedTarget) {
+      occurrenceIndex += 1;
+    }
+  }
+
+  return occurrenceIndex;
 }
 
 function isBetterDetectedCandidate(next: DetectedAttendanceCandidate, current: DetectedAttendanceCandidate) {
@@ -138,7 +343,21 @@ function dedupeDetectedCandidates(candidates: DetectedAttendanceCandidate[]) {
     }
   }
 
-  return Array.from(new Set([...byRow.values(), ...byName.values()])).sort((a, b) => {
+  const rowCandidates = [...byRow.values()];
+  const rowCandidateNameKeys = new Set(
+    rowCandidates
+      .map((candidate) => normalizePersonName(candidate.resolvedName || candidate.sourceName))
+      .filter(Boolean),
+  );
+  const merged = [
+    ...rowCandidates,
+    ...[...byName.values()].filter((candidate) => {
+      const normalizedName = normalizePersonName(candidate.resolvedName || candidate.sourceName);
+      return normalizedName && !rowCandidateNameKeys.has(normalizedName);
+    }),
+  ];
+
+  return merged.sort((a, b) => {
     const rowA = a.rowNumber ?? Number.MAX_SAFE_INTEGER;
     const rowB = b.rowNumber ?? Number.MAX_SAFE_INTEGER;
     return (
@@ -171,21 +390,352 @@ function findExactParticipantByName(participants: ParticipantRecord[], rawName: 
   return participants.find((participant) => normalizePersonName(participant.name) === normalizedTarget) ?? null;
 }
 
+function findParticipantsByExactName(participants: ParticipantRecord[], rawName: string) {
+  const normalizedTarget = normalizePersonName(rawName);
+  if (!normalizedTarget) {
+    return [];
+  }
+
+  return participants
+    .filter((participant) => normalizePersonName(participant.name) === normalizedTarget)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.name.localeCompare(b.name));
+}
+
+function findMasterRosterParticipantByRow(params: {
+  candidate: DetectedAttendanceCandidate;
+  participants: ParticipantRecord[];
+}) {
+  const { candidate, participants } = params;
+  const rowNumber = candidate.rowNumber;
+  const rosterName = getMasterRosterName(rowNumber);
+  if (!rowNumber || !rosterName) {
+    return null;
+  }
+
+  const comparisonName = toDisplayPersonName(candidate.resolvedName || candidate.sourceName);
+  const rowComparison = findBestParticipantMatch(comparisonName, [{ id: `master-row-${rowNumber}`, name: rosterName }]);
+  if (!rowComparison) {
+    return null;
+  }
+
+  const compactLength = normalizePersonName(comparisonName).replace(/\s+/g, "").length;
+  const threshold = compactLength <= 4 ? 0.92 : 0.84;
+  if (rowComparison.score < threshold) {
+    return null;
+  }
+
+  const matches = findParticipantsByExactName(participants, rosterName);
+  if (matches.length === 0) {
+    return null;
+  }
+
+  return {
+    participant: matches[getMasterRosterOccurrenceIndex(rowNumber, rosterName)] ?? matches[0],
+    rosterName,
+    score: rowComparison.score,
+  };
+}
+
+function isNewParticipantSelectionId(participantId: string) {
+  return participantId.startsWith(NEW_PARTICIPANT_ID_PREFIX);
+}
+
+function buildNewParticipantId(candidate: DetectedAttendanceCandidate, participantName: string) {
+  const normalizedName = normalizePersonName(participantName).replace(/\s+/g, "-") || "peserta";
+  return `${NEW_PARTICIPANT_ID_PREFIX}${candidate.pageNumber}:${candidate.rowNumber ?? "x"}:${normalizedName}`;
+}
+
+function buildNewParticipantRecord(candidate: DetectedAttendanceCandidate, participantName: string): ParticipantRecord {
+  return {
+    id: buildNewParticipantId(candidate, participantName),
+    name: participantName,
+    address: candidate.addressHint ?? null,
+    gender: null,
+    createdAt: new Date(0),
+  };
+}
+
 function buildReviewItemId(candidate: DetectedAttendanceCandidate, participantId: string) {
   const normalizedSource = normalizePersonName(candidate.resolvedName || candidate.sourceName || "scan");
   return [participantId, candidate.pageNumber, candidate.rowNumber ?? "x", normalizedSource].join(":");
 }
 
+function pushUniqueWarning(warnings: string[], message: string) {
+  if (!warnings.includes(message)) {
+    warnings.push(message);
+  }
+}
+
+async function findOrCreateParticipantFromScan(rawName: string, warnings: string[]) {
+  const name = toDisplayPersonName(rawName);
+  const normalizedName = normalizePersonName(name);
+  if (!normalizedName || !looksLikeHumanName(name)) {
+    return null;
+  }
+
+  const lookupSeed = normalizedName.split(" ")[0] || name.trim().slice(0, 2) || name.trim();
+  const existingCandidates = await prisma.participant.findMany({
+    where: {
+      name: {
+        contains: lookupSeed,
+        mode: "insensitive",
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+  const existing =
+    existingCandidates.find((participant) => normalizePersonName(participant.name) === normalizedName) ??
+    (await prisma.participant.findFirst({
+      where: { name: { equals: name, mode: "insensitive" } },
+      select: {
+        id: true,
+        name: true,
+      },
+    }));
+
+  if (existing) {
+    return existing;
+  }
+
+  const participant = await prisma.participant.create({
+    data: {
+      name,
+      address: null,
+      gender: null,
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  const sheetName = process.env.GOOGLE_SHEETS_PARTICIPANTS_SHEET_NAME ?? "Peserta";
+  const appendResult = await appendRow(sheetName, [
+    new Date().toISOString(),
+    participant.name,
+    "",
+    "",
+  ]).catch((error) => {
+    console.error("Failed to append OCR-created participant to sheet", error);
+    return { ok: false } as const;
+  });
+
+  if (!appendResult.ok) {
+    pushUniqueWarning(warnings, "Peserta baru tersimpan di database, tetapi sync ke sheet peserta gagal.");
+  }
+
+  return participant;
+}
+
+const PRIORITY_ROSTER_ALIASES = PRIORITY_ATTENDANCE_ROSTER.flatMap((entry, index) => {
+  const names = Array.from(new Set([entry.sourceName, entry.participantName, ...entry.aliases]));
+  return names.map((name) => ({
+    id: `${index + 1}:${normalizePersonName(name)}`,
+    name,
+    rowNumber: index + 1,
+    entry,
+  }));
+});
+
+function findPriorityRosterMatch(rawName: string) {
+  const displayName = toDisplayPersonName(rawName);
+  const normalizedName = normalizePersonName(displayName);
+  if (!normalizedName) {
+    return null;
+  }
+
+  const exactAlias = PRIORITY_ROSTER_ALIASES.find((alias) => normalizePersonName(alias.name) === normalizedName);
+  if (exactAlias) {
+    return {
+      rowNumber: exactAlias.rowNumber,
+      entry: exactAlias.entry,
+      score: 1,
+    };
+  }
+
+  const fuzzyAlias = findBestParticipantMatch(displayName, PRIORITY_ROSTER_ALIASES);
+  if (!fuzzyAlias || fuzzyAlias.ambiguous) {
+    return null;
+  }
+
+  const compactLength = normalizedName.replace(/\s+/g, "").length;
+  const threshold = compactLength <= 4 ? 0.92 : 0.86;
+  if (fuzzyAlias.score < threshold) {
+    return null;
+  }
+
+  return {
+    rowNumber: fuzzyAlias.participant.rowNumber,
+    entry: fuzzyAlias.participant.entry,
+    score: fuzzyAlias.score,
+  };
+}
+
 function shouldPreferRosterByRow(candidates: DetectedAttendanceCandidate[]) {
+  const visibleRows = candidates
+    .map((candidate) => candidate.rowNumber)
+    .filter((rowNumber): rowNumber is number => typeof rowNumber === "number" && rowNumber >= 1 && rowNumber <= 120);
+  const highestVisibleRow = visibleRows.length > 0 ? Math.max(...visibleRows) : 0;
+
+  if (highestVisibleRow > PRIORITY_ATTENDANCE_ROSTER.length + 4) {
+    return false;
+  }
+
   const uniqueRows = new Set(
+    visibleRows.filter((rowNumber) => rowNumber <= PRIORITY_ATTENDANCE_ROSTER.length),
+  );
+  const uniqueAliasRows = new Set(
     candidates
-      .map((candidate) => candidate.rowNumber)
-      .filter((rowNumber): rowNumber is number => typeof rowNumber === "number" && rowNumber >= 1 && rowNumber <= PRIORITY_ATTENDANCE_ROSTER.length),
+      .map((candidate) => findPriorityRosterMatch(candidate.resolvedName)?.rowNumber ?? findPriorityRosterMatch(candidate.sourceName)?.rowNumber)
+      .filter((rowNumber): rowNumber is number => typeof rowNumber === "number"),
   );
 
   // Jika mayoritas besar dari 41 baris roster terdeteksi, anggap ini lembar roster tetap
   // dan prioritaskan nomor baris dibanding ejaan OCR yang mudah meleset.
-  return uniqueRows.size >= 30;
+  return uniqueRows.size >= 30 || uniqueAliasRows.size >= 20;
+}
+
+function normalizePriorityRosterCandidates(candidates: DetectedAttendanceCandidate[]) {
+  const byPage = new Map<number, DetectedAttendanceCandidate[]>();
+  const normalized: DetectedAttendanceCandidate[] = [];
+
+  for (const candidate of candidates) {
+    const pageCandidates = byPage.get(candidate.pageNumber) ?? [];
+    pageCandidates.push(candidate);
+    byPage.set(candidate.pageNumber, pageCandidates);
+  }
+
+  for (const [pageNumber, pageCandidates] of byPage) {
+    if (!shouldPreferRosterByRow(pageCandidates)) {
+      normalized.push(...pageCandidates);
+      continue;
+    }
+
+    const byRosterRow = new Map<number, DetectedAttendanceCandidate>();
+
+    for (const candidate of pageCandidates) {
+      const nameMatch =
+        findPriorityRosterMatch(candidate.resolvedName) ?? findPriorityRosterMatch(candidate.sourceName);
+      const rowEntry = nameMatch ? null : getPriorityRosterEntry(candidate.rowNumber);
+      const rowNumber = nameMatch?.rowNumber ?? candidate.rowNumber;
+      const entry = nameMatch?.entry ?? rowEntry;
+
+      if (!entry || !rowNumber || rowNumber < 1 || rowNumber > PRIORITY_ATTENDANCE_ROSTER.length) {
+        continue;
+      }
+
+      const nextCandidate: DetectedAttendanceCandidate = {
+        ...candidate,
+        rowNumber,
+        resolvedName: entry.participantName,
+        confidence: nameMatch ? "high" : candidate.confidence,
+        reason: nameMatch
+          ? "Nama dicocokkan ke alias roster tetap 41 peserta."
+          : "Nama diarahkan oleh nomor baris pada roster tetap 41 peserta.",
+      };
+      const current = byRosterRow.get(rowNumber);
+      if (!current || isBetterDetectedCandidate(nextCandidate, current)) {
+        byRosterRow.set(rowNumber, nextCandidate);
+      }
+    }
+
+    for (let index = 0; index < PRIORITY_ATTENDANCE_ROSTER.length; index += 1) {
+      const rowNumber = index + 1;
+      if (byRosterRow.has(rowNumber)) {
+        continue;
+      }
+
+      const entry = PRIORITY_ATTENDANCE_ROSTER[index];
+      byRosterRow.set(rowNumber, {
+        pageNumber,
+        rowNumber,
+        sourceName: `${rowNumber}. ${entry.sourceName}`,
+        resolvedName: entry.participantName,
+        confidence: "high",
+        reason: "Baris dilengkapi dari roster tetap karena format 41 peserta sudah terdeteksi.",
+      });
+    }
+
+    normalized.push(...[...byRosterRow.values()].sort((a, b) => (a.rowNumber ?? 0) - (b.rowNumber ?? 0)));
+  }
+
+  return dedupeDetectedCandidates(normalized);
+}
+
+function buildPriorityRosterPreviewText(candidates: DetectedAttendanceCandidate[]) {
+  const rowsByPage = new Map<number, Set<number>>();
+
+  for (const candidate of candidates) {
+    if (
+      typeof candidate.rowNumber !== "number" ||
+      candidate.rowNumber < 1 ||
+      candidate.rowNumber > PRIORITY_ATTENDANCE_ROSTER.length
+    ) {
+      continue;
+    }
+
+    const rows = rowsByPage.get(candidate.pageNumber) ?? new Set<number>();
+    rows.add(candidate.rowNumber);
+    rowsByPage.set(candidate.pageNumber, rows);
+  }
+
+  const sections: string[] = [];
+  for (const [pageNumber, rows] of rowsByPage) {
+    if (rows.size < PRIORITY_ATTENDANCE_ROSTER.length) {
+      continue;
+    }
+
+    sections.push(`Halaman ${pageNumber}`);
+    sections.push(
+      ...PRIORITY_ATTENDANCE_ROSTER.map((entry, index) => `${index + 1}. ${entry.sourceName}`),
+    );
+    sections.push("");
+  }
+
+  return sections.join("\n").trim();
+}
+
+function parseStructuredPreviewPages(previewText: string) {
+  const text = previewText.trim();
+  if (!text) {
+    return [];
+  }
+
+  const pages: Array<{ pageNumber: number; text: string }> = [];
+  let currentPageNumber = 1;
+  let currentLines: string[] = [];
+
+  const flushCurrentPage = () => {
+    const pageText = currentLines.join("\n").trim();
+    if (pageText) {
+      pages.push({
+        pageNumber: currentPageNumber,
+        text: pageText,
+      });
+    }
+    currentLines = [];
+  };
+
+  for (const line of text.split(/\r?\n/)) {
+    const pageMatch = line.trim().match(/^Halaman\s+(\d+)/i);
+    if (pageMatch) {
+      flushCurrentPage();
+      currentPageNumber = Number(pageMatch[1]) || currentPageNumber;
+      continue;
+    }
+
+    currentLines.push(line);
+  }
+
+  flushCurrentPage();
+
+  return pages.length > 0 ? pages : [{ pageNumber: 1, text }];
 }
 
 function resolveCandidateToParticipant(params: {
@@ -194,16 +744,20 @@ function resolveCandidateToParticipant(params: {
   preferRosterByRow?: boolean;
 }) {
   const { candidate, participants } = params;
+  const fromStructuredPreview = candidate.reason.toLowerCase().includes("ringkasan ocr terstruktur");
   const candidateName = toDisplayPersonName(candidate.resolvedName || candidate.sourceName);
+  const sourceCandidateName = toDisplayPersonName(candidate.sourceName || candidate.resolvedName);
+  const canCreateFromStructuredPreview = fromStructuredPreview && looksLikeHumanName(candidateName);
   const rowRosterName = getPriorityRosterName(candidate.rowNumber);
   const rowRosterParticipant = rowRosterName ? findExactParticipantByName(participants, rowRosterName) : null;
+  const rowComparisonName = sourceCandidateName || candidateName;
   const rowRosterComparison =
     rowRosterParticipant && rowRosterName
-      ? findBestParticipantMatch(candidateName, [{ id: rowRosterParticipant.id, name: rowRosterName }])
+      ? findBestParticipantMatch(rowComparisonName, [{ id: rowRosterParticipant.id, name: rowRosterName }])
       : null;
 
   if (rowRosterParticipant && rowRosterName && params.preferRosterByRow) {
-    const fuzzyAgainstAll = findBestParticipantMatch(candidateName, participants);
+    const fuzzyAgainstAll = findBestParticipantMatch(rowComparisonName, participants);
     const strongCompetingMatch =
       fuzzyAgainstAll &&
       fuzzyAgainstAll.participant.id !== rowRosterParticipant.id &&
@@ -236,6 +790,19 @@ function resolveCandidateToParticipant(params: {
     }
   }
 
+  const masterRosterMatch = fromStructuredPreview
+    ? findMasterRosterParticipantByRow({ candidate, participants })
+    : null;
+  if (masterRosterMatch) {
+    return {
+      participant: masterRosterMatch.participant,
+      resolutionMethod: "roster" as const,
+      matchScore: masterRosterMatch.score,
+      reviewRequired: false,
+      reason: `Nama diarahkan oleh nomor baris ${candidate.rowNumber} pada roster peserta master.`,
+    };
+  }
+
   const exactMatch = findExactParticipantByName(participants, candidateName);
   if (exactMatch) {
     return {
@@ -249,6 +816,16 @@ function resolveCandidateToParticipant(params: {
 
   const fuzzyMatch = findBestParticipantMatch(candidateName, participants);
   if (!fuzzyMatch) {
+    if (canCreateFromStructuredPreview) {
+      return {
+        participant: buildNewParticipantRecord(candidate, candidateName),
+        resolutionMethod: "new" as const,
+        matchScore: 1,
+        reviewRequired: true,
+        reason: "Nama dari ringkasan belum ada di database; akan dibuat sebagai peserta baru saat disimpan.",
+      };
+    }
+
     return {
       participant: null,
       resolutionMethod: null,
@@ -295,6 +872,26 @@ function resolveCandidateToParticipant(params: {
       matchScore: fuzzyMatch.score,
       reviewRequired: true,
       reason: `Nama paling dekat ke "${fuzzyMatch.participant.name}" (skor ${fuzzyMatch.score.toFixed(2)}), perlu review manual sebelum disimpan.`,
+    };
+  }
+
+  if (fromStructuredPreview) {
+    if (canCreateFromStructuredPreview) {
+      return {
+        participant: buildNewParticipantRecord(candidate, candidateName),
+        resolutionMethod: "new" as const,
+        matchScore: 0,
+        reviewRequired: true,
+        reason: `Nama dari ringkasan terlalu jauh dari peserta lama (skor ${fuzzyMatch.score.toFixed(2)}); akan dibuat sebagai peserta baru saat disimpan.`,
+      };
+    }
+
+    return {
+      participant: fuzzyMatch.participant,
+      resolutionMethod: fuzzyMatch.reason,
+      matchScore: fuzzyMatch.score,
+      reviewRequired: true,
+      reason: `Nama dari ringkasan paling dekat ke "${fuzzyMatch.participant.name}" (skor ${fuzzyMatch.score.toFixed(2)}), ikut dipilih agar hasil ringkasan bisa disimpan setelah dicek.`,
     };
   }
 
@@ -378,15 +975,26 @@ async function runAttendanceScanJob(params: {
     const parsedVisionResult = processAttendanceOcrText({
       pages: visionResult.pages,
     });
+    const parsedGeminiPreviewResult = processAttendanceOcrText({
+      pages: parseStructuredPreviewPages(geminiResult.previewText),
+    });
 
+    const previewCandidates = parsedGeminiPreviewResult.attendees.map((item) => ({
+      ...item,
+      confidence: item.confidence === "low" ? "medium" : item.confidence,
+      reason: "Nama diparse dari ringkasan OCR terstruktur yang tampil di halaman.",
+    } satisfies DetectedAttendanceCandidate));
     const geminiStrongEnough = geminiResult.attendees.length >= 10;
-    const mergedCandidates = dedupeDetectedCandidates([
+    const fallbackCandidates = [
       ...geminiResult.attendees,
       ...(geminiStrongEnough ? ocrResult.attendees.filter((item) => item.confidence === "high") : ocrResult.attendees),
       ...(geminiStrongEnough
         ? parsedVisionResult.attendees.filter((item) => item.confidence !== "low")
         : parsedVisionResult.attendees),
-    ]);
+    ];
+    const mergedCandidates = normalizePriorityRosterCandidates(
+      dedupeDetectedCandidates(previewCandidates.length > 0 ? previewCandidates : fallbackCandidates),
+    );
 
     const warnings = Array.from(
       new Set([
@@ -394,6 +1002,7 @@ async function runAttendanceScanJob(params: {
         ...geminiResult.notes,
         ...ocrResult.notes,
         ...parsedVisionResult.notes,
+        ...parsedGeminiPreviewResult.notes,
       ]),
     );
 
@@ -416,6 +1025,12 @@ async function runAttendanceScanJob(params: {
         sourceName: item.sourceName,
         reason: item.reason,
       })),
+      ...parsedGeminiPreviewResult.skipped.map((item) => ({
+        pageNumber: item.pageNumber,
+        rowNumber: undefined,
+        sourceName: item.sourceName,
+        reason: item.reason,
+      })),
     ]);
 
     const reviewItems: AttendanceScanJobResult["reviewItems"] = [];
@@ -423,6 +1038,7 @@ async function runAttendanceScanJob(params: {
     const participantSeenInScan = new Set<string>();
     const totalCandidates = Math.max(mergedCandidates.length, 1);
     const preferRosterByRow = shouldPreferRosterByRow(mergedCandidates);
+    const priorityRosterPreviewText = buildPriorityRosterPreviewText(mergedCandidates);
 
     for (let index = 0; index < mergedCandidates.length; index += 1) {
       const candidate = mergedCandidates[index];
@@ -446,15 +1062,19 @@ async function runAttendanceScanJob(params: {
 
       let saveStatus: ReviewSaveStatus = resolved.reviewRequired ? "REVIEW_REQUIRED" : "READY";
       let reason = resolved.reason;
+      const participantScanKey =
+        resolved.resolutionMethod === "new"
+          ? `${NEW_PARTICIPANT_ID_PREFIX}${normalizePersonName(resolved.participant.name)}`
+          : resolved.participant.id;
 
-      if (participantSeenInScan.has(resolved.participant.id)) {
+      if (participantSeenInScan.has(participantScanKey)) {
         saveStatus = "DUPLICATE_IN_SCAN";
         reason = "Peserta yang sama terdeteksi lagi pada scan yang sama, jadi tidak dipilih otomatis.";
       } else {
-        participantSeenInScan.add(resolved.participant.id);
+        participantSeenInScan.add(participantScanKey);
       }
 
-      if (saveStatus !== "DUPLICATE_IN_SCAN") {
+      if (saveStatus !== "DUPLICATE_IN_SCAN" && resolved.resolutionMethod !== "new") {
         const existingAttendance = await prisma.attendance.findUnique({
           where: {
             participantId_eventDate: {
@@ -481,7 +1101,9 @@ async function runAttendanceScanJob(params: {
         resolutionMethod: resolved.resolutionMethod,
         matchScore: resolved.matchScore > 0 ? Number(resolved.matchScore.toFixed(4)) : undefined,
         saveStatus,
-        selectedByDefault: saveStatus === "READY",
+        selectedByDefault:
+          saveStatus === "READY" ||
+          (saveStatus === "REVIEW_REQUIRED" && candidate.reason.toLowerCase().includes("ringkasan ocr terstruktur")),
         reason,
       });
     }
@@ -499,7 +1121,11 @@ async function runAttendanceScanJob(params: {
       structured: {
         displayDate: geminiResult.displayDate ?? parsedVisionResult.displayDate,
         detectedEventDate: geminiResult.detectedEventDate ?? parsedVisionResult.detectedEventDate,
-        previewText: geminiResult.previewText || parsedVisionResult.previewText || visionResult.pages.map((page) => page.text).join("\n\n").trim(),
+        previewText:
+          priorityRosterPreviewText ||
+          geminiResult.previewText ||
+          parsedVisionResult.previewText ||
+          visionResult.pages.map((page) => page.text).join("\n\n").trim(),
       },
       reviewItems,
       unresolved: dedupeUnresolved(unresolved),
@@ -628,10 +1254,14 @@ export async function PUT(req: Request) {
     let createdAttendance = 0;
     let alreadyPresent = 0;
 
+    const existingParticipantIds = uniqueSelections
+      .filter((item) => !isNewParticipantSelectionId(item.participantId))
+      .map((item) => item.participantId);
+
     const participants = await prisma.participant.findMany({
       where: {
         id: {
-          in: uniqueSelections.map((item) => item.participantId),
+          in: existingParticipantIds,
         },
       },
       select: {
@@ -643,13 +1273,18 @@ export async function PUT(req: Request) {
     const participantMap = new Map(participants.map((participant) => [participant.id, participant]));
 
     for (const selection of uniqueSelections) {
-      const participant = participantMap.get(selection.participantId);
+      const participant = isNewParticipantSelectionId(selection.participantId)
+        ? await findOrCreateParticipantFromScan(selection.participantName, warnings)
+        : participantMap.get(selection.participantId);
+
       if (!participant) {
         results.push({
           participantId: selection.participantId,
           participantName: selection.participantName || "Peserta tidak ditemukan",
           attendanceStatus: "SKIPPED",
-          reason: "Peserta tidak ditemukan di database.",
+          reason: isNewParticipantSelectionId(selection.participantId)
+            ? "Nama dari ringkasan belum cukup valid untuk dibuat sebagai peserta baru."
+            : "Peserta tidak ditemukan di database.",
         });
         continue;
       }

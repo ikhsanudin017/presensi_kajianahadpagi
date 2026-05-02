@@ -60,6 +60,21 @@ async function callVisionDocumentText(base64Image: string) {
   return String(annotation?.fullTextAnnotation?.text || "").trim();
 }
 
+function toVisionWarning(pageNumber: number, error: unknown) {
+  const message = error instanceof Error ? error.message : "VISION_REQUEST_FAILED";
+  const lower = message.toLowerCase();
+
+  if (lower.includes("requires billing to be enabled") || lower.includes("billing")) {
+    return `Vision halaman ${pageNumber} dilewati karena billing Google Cloud belum aktif. Fallback OCR lokal tetap dipakai.`;
+  }
+
+  if (message === "GOOGLE_CLOUD_VISION_API_KEY_MISSING") {
+    return `Vision halaman ${pageNumber} dilewati karena API key belum tersedia.`;
+  }
+
+  return `Vision halaman ${pageNumber} gagal: ${message}`;
+}
+
 export async function scanAttendanceImagesWithVision(params: {
   images: AttendanceVisionImageInput[];
   onProgress?: (progress: {
@@ -98,9 +113,7 @@ export async function scanAttendanceImagesWithVision(params: {
         text,
       });
     } catch (error) {
-      notes.push(
-        `Vision halaman ${pageNumber} gagal: ${error instanceof Error ? error.message : "VISION_REQUEST_FAILED"}`,
-      );
+      notes.push(toVisionWarning(pageNumber, error));
     }
   }
 

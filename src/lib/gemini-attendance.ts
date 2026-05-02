@@ -7,6 +7,7 @@ import {
   looksLikeHumanName,
   toDisplayPersonName,
 } from "@/lib/name-matching";
+import { processAttendanceOcrText } from "@/lib/attendance-photo-parser";
 
 export type AttendanceGeminiScanImageInput = {
   pageNumber: number;
@@ -251,6 +252,58 @@ function toConfidenceLabel(value?: number | null): DetectedAttendanceCandidate["
   return "low";
 }
 
+type ParticipantHintMatch = NonNullable<ReturnType<typeof findBestParticipantMatch<{ id: string; name: string }>>>;
+
+function shouldUseMatchedParticipantName(
+  match: ReturnType<typeof findBestParticipantMatch<{ id: string; name: string }>>,
+): match is ParticipantHintMatch {
+  if (!match || match.ambiguous) {
+    return false;
+  }
+
+  if (match.reason === "exact" || match.reason === "phonetic") {
+    return match.score >= 0.78;
+  }
+
+  return match.score >= 0.92;
+}
+
+function buildGeminiCandidate(params: {
+  pageNumber: number;
+  row: GeminiExtractedRow;
+  participantsForMatch: Array<{ id: string; name: string }>;
+  defaultConfidence?: DetectedAttendanceCandidate["confidence"];
+  reason: string;
+}) {
+  const rawName = toDisplayPersonName(params.row.name || "");
+  if (!rawName || rawName.replace(/\s+/g, "").length < 3) {
+    return null;
+  }
+
+  const matched =
+    params.participantsForMatch.length > 0
+      ? findBestParticipantMatch(rawName, params.participantsForMatch)
+      : null;
+  const resolvedName =
+    shouldUseMatchedParticipantName(matched)
+      ? toDisplayPersonName(matched.participant.name)
+      : rawName;
+
+  if (!looksLikeHumanName(resolvedName)) {
+    return null;
+  }
+
+  return {
+    pageNumber: params.pageNumber,
+    rowNumber: typeof params.row.rowNumber === "number" ? params.row.rowNumber : undefined,
+    sourceName: params.row.name?.trim() || resolvedName,
+    resolvedName,
+    confidence: params.defaultConfidence ?? toConfidenceLabel(typeof params.row.confidence === "number" ? params.row.confidence : matched?.score),
+    reason: params.reason,
+    addressHint: params.row.addressHint?.trim() || undefined,
+  } satisfies DetectedAttendanceCandidate;
+}
+
 export async function scanAttendanceImagesWithGemini(params: {
   images: AttendanceGeminiScanImageInput[];
   participantNames?: string[];
@@ -319,45 +372,55 @@ export async function scanAttendanceImagesWithGemini(params: {
       previewParts.push("");
     }
 
-    for (const row of extracted.result.rows ?? []) {
-      const rawName = toDisplayPersonName(row.name || "");
-      if (!rawName || rawName.replace(/\s+/g, "").length < 3) {
-        continue;
-      }
+    const transcriptRows = normalizedTranscript
+      ? processAttendanceOcrText({
+          pages: [{ pageNumber, text: normalizedTranscript }],
+        }).attendees.map((item) => ({
+          rowNumber: item.rowNumber,
+          name: item.resolvedName,
+          addressHint: item.addressHint ?? null,
+          confidence: item.confidence === "high" ? 0.9 : item.confidence === "medium" ? 0.76 : 0.58,
+        } satisfies GeminiExtractedRow))
+      : [];
 
-      const matched =
-        participantsForMatch.length > 0
-          ? findBestParticipantMatch(rawName, participantsForMatch)
-          : null;
-      const resolvedName =
-        matched && matched.score >= 0.78
-          ? toDisplayPersonName(matched.participant.name)
-          : rawName;
+    const rowsToProcess = [
+      ...(extracted.result.rows ?? []).map((row) => ({
+        row,
+        reason: "Nama dibaca oleh Gemini Vision lalu dirapikan menjadi hasil terstruktur.",
+      })),
+      ...transcriptRows.map((row) => ({
+        row,
+        reason: "Nama diparse ulang dari transcript Gemini yang tampil di ringkasan.",
+      })),
+    ];
 
-      if (!looksLikeHumanName(resolvedName)) {
+    for (const { row, reason } of rowsToProcess) {
+      const candidate = buildGeminiCandidate({
+        pageNumber,
+        row,
+        participantsForMatch,
+        reason,
+      });
+
+      if (!candidate) {
         skipped.push({
           pageNumber,
-          sourceName: row.name?.trim() || rawName,
+          sourceName: row.name?.trim() || "",
           reason: "Gemini membaca teks, tetapi belum cukup valid sebagai nama peserta.",
         });
         continue;
       }
 
-      const key = resolvedName.toLowerCase().replace(/\s+/g, " ").trim();
+      const normalizedCandidateName = candidate.resolvedName.toLowerCase().replace(/\s+/g, " ").trim();
+      const key = candidate.rowNumber
+        ? `${candidate.pageNumber}:${candidate.rowNumber}:${normalizedCandidateName}`
+        : normalizedCandidateName;
       if (!key || seenNames.has(key)) {
         continue;
       }
       seenNames.add(key);
 
-      attendees.push({
-        pageNumber,
-        rowNumber: typeof row.rowNumber === "number" ? row.rowNumber : undefined,
-        sourceName: row.name?.trim() || resolvedName,
-        resolvedName,
-        confidence: toConfidenceLabel(typeof row.confidence === "number" ? row.confidence : matched?.score),
-        reason: "Nama dibaca oleh Gemini Vision lalu dirapikan menjadi hasil terstruktur.",
-        addressHint: row.addressHint?.trim() || undefined,
-      });
+      attendees.push(candidate);
     }
   }
 

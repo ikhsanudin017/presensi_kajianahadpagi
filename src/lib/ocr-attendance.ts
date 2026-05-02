@@ -150,10 +150,15 @@ function isHeaderLine(value: string) {
 }
 
 function cleanupNamePart(value: string) {
+  const keepCommunityTitle = /^\s*(?:bu|ibu|pak|bapak)\s+r[wt]\b/i.test(value);
+  const contactPattern = keepCommunityTitle
+    ? /\b(?:dusun|dukuh|wa|hp|no)\b.*$/i
+    : /\b(?:dusun|dukuh|rt|rw|wa|hp|no)\b.*$/i;
+
   return sanitizeDetectedName(
     value
       .replace(/[|[\]{}<>_*~`=+\-\/\\]+/g, " ")
-      .replace(/\b(?:dusun|dukuh|rt|rw|wa|hp|no)\b.*$/i, " ")
+      .replace(contactPattern, " ")
       .replace(/\s{2,}/g, " ")
       .trim(),
   );
@@ -193,9 +198,9 @@ function splitNameAndAddress(rawLine: string) {
 
 function parseRowNumberToken(value: string) {
   const normalized = value.replace(/[|Il]/g, "1").replace(/O/g, "0");
-  if (!/^\d{1,2}$/.test(normalized)) return null;
+  if (!/^\d{1,3}$/.test(normalized)) return null;
   const number = Number(normalized);
-  if (!Number.isFinite(number) || number < 1 || number > 120) return null;
+  if (!Number.isFinite(number) || number < 1 || number > 250) return null;
   return number;
 }
 

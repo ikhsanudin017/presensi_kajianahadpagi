@@ -23,7 +23,7 @@ export type AttendanceScanJobResult = {
     participantName: string;
     participantId: string;
     confidence: "high" | "medium" | "low";
-    resolutionMethod: "exact" | "phonetic" | "fuzzy" | "roster";
+    resolutionMethod: "exact" | "phonetic" | "fuzzy" | "roster" | "new";
     matchScore?: number;
     saveStatus: "READY" | "REVIEW_REQUIRED" | "ALREADY_PRESENT" | "DUPLICATE_IN_SCAN";
     selectedByDefault: boolean;
