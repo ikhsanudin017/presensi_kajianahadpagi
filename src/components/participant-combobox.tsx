@@ -50,13 +50,19 @@ export function ParticipantCombobox({ value, onSelect, onCreateNew, open: openPr
   }, [open, query]);
 
   const options = React.useMemo<ComboboxResponsiveOption[]>(
-    () =>
-      items.map((participant) => ({
+    () => {
+      const source =
+        value && !items.some((participant) => participant.id === value.id)
+          ? [value, ...items]
+          : items;
+
+      return source.map((participant) => ({
         value: participant.id,
         label: participant.name,
         subtitle: participant.address ?? undefined,
-      })),
-    [items]
+      }));
+    },
+    [items, value]
   );
 
   return (
@@ -68,12 +74,12 @@ export function ParticipantCombobox({ value, onSelect, onCreateNew, open: openPr
       query={query}
       onQueryChange={setQuery}
       onSelect={(id) => {
-        const participant = items.find((item) => item.id === id);
+        const participant = items.find((item) => item.id === id) ?? (value?.id === id ? value : null);
         if (participant) onSelect(participant);
       }}
       placeholder="Pilih peserta"
       searchPlaceholder="Cari nama peserta..."
-      emptyText="Tidak ada nama cocok."
+      emptyText="Nama tidak ditemukan."
       loading={loading}
       foundText={`${items.length} peserta ditemukan`}
       onCreateNew={onCreateNew}

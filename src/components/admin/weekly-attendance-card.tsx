@@ -211,12 +211,12 @@ export function WeeklyAttendanceCard({ className, weeks = 12 }: WeeklyAttendance
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="gap-2 text-[hsl(var(--danger))] hover:bg-danger/10 hover:text-[hsl(var(--danger))]"
+                    className="w-full gap-2 text-[hsl(var(--danger))] hover:bg-danger/10 hover:text-[hsl(var(--danger))] md:w-auto"
                     onClick={() => deleteWeekGroup(group)}
                     disabled={deletingWeekKey === group.weekStart}
                   >
                     <Trash2 size={14} />
-                    {deletingWeekKey === group.weekStart ? "Menghapus pekan..." : "Hapus Semua Presensi Pekan Ini"}
+                    {deletingWeekKey === group.weekStart ? "Menghapus pekan..." : "Hapus Presensi Pekan"}
                   </Button>
                 </div>
               </div>

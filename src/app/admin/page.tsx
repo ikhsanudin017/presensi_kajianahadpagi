@@ -35,6 +35,12 @@ type AttendanceRow = {
 
 type ParticipantRow = Participant;
 
+function genderLabel(gender?: "L" | "P" | null) {
+  if (gender === "L") return "Laki-laki";
+  if (gender === "P") return "Perempuan";
+  return "-";
+}
+
 export default function AdminPage() {
   const { showToast } = useToast();
   const today = dayjs().tz("Asia/Jakarta").format("YYYY-MM-DD");
@@ -358,15 +364,15 @@ export default function AdminPage() {
       <SiteShell>
         <PageShell
           eyebrow="Kontrol Data"
-          title="Admin Presensi"
-          description="Filter presensi berdasarkan tanggal dan pencarian nama."
+          title="Kelola Presensi"
+          description="Cari, koreksi, unduh, dan rapikan data presensi jamaah."
           actions={
             <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto md:justify-end">
               <Button variant="outline" size="sm" onClick={handleDownloadAttendance} className="w-full sm:w-auto">
-                Unduh Presensi (Excel)
+                Unduh Presensi CSV
               </Button>
               <Button variant="outline" size="sm" onClick={handleDownloadLeaderboard} className="w-full sm:w-auto">
-                Unduh Leaderboard (Excel)
+                Unduh Leaderboard CSV
               </Button>
             </div>
           }
@@ -499,7 +505,7 @@ export default function AdminPage() {
                       <div className="min-w-0">
                         <p className="font-semibold text-[hsl(var(--foreground))]">{row.participant.name}</p>
                         <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                          {row.participant.address ?? "Alamat tidak tersedia"} - {row.participant.gender ?? "N/A"}
+                          {row.participant.address ?? "Alamat tidak tersedia"} - {genderLabel(row.participant.gender)}
                         </p>
                       </div>
                       <div className="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
@@ -533,7 +539,7 @@ export default function AdminPage() {
               <thead>
                 <tr className="border-b border-[hsl(var(--border))] text-left text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--muted-foreground))]">
                   <th className="py-2 pr-2">Peserta</th>
-                  <th className="py-2 pr-2">Alamat / Gender</th>
+                  <th className="py-2 pr-2">Alamat / Jenis Kelamin</th>
                   <th className="py-2 pr-2">Waktu</th>
                   <th className="py-2 pr-2">Device</th>
                   <th className="py-2 text-right">Aksi</th>
@@ -562,7 +568,7 @@ export default function AdminPage() {
                       <tr className="border-b border-[hsl(var(--border))/0.7] last:border-b-0">
                         <td className="py-3 pr-2 font-semibold">{row.participant.name}</td>
                         <td className="py-3 pr-2 text-[hsl(var(--muted-foreground))]">
-                          {(row.participant.address ?? "Alamat tidak tersedia") + " - " + (row.participant.gender ?? "N/A")}
+                          {(row.participant.address ?? "Alamat tidak tersedia") + " - " + genderLabel(row.participant.gender)}
                         </td>
                         <td className="py-3 pr-2">{dayjs(row.createdAt).tz("Asia/Jakarta").format("HH:mm")} WIB</td>
                         <td className="max-w-[220px] truncate py-3 pr-2 text-[hsl(var(--muted-foreground))]">{row.deviceId ?? "-"}</td>
@@ -673,7 +679,7 @@ export default function AdminPage() {
                         <div className="min-w-0">
                           <p className="font-semibold text-[hsl(var(--foreground))]">{p.name}</p>
                           <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                            {p.address ?? "Alamat tidak tersedia"} - {p.gender ?? "N/A"}
+                            {p.address ?? "Alamat tidak tersedia"} - {genderLabel(p.gender)}
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-1 text-[hsl(var(--foreground))]">
@@ -702,7 +708,7 @@ export default function AdminPage() {
                       <tr className="border-b border-[hsl(var(--border))] text-left text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--muted-foreground))]">
                         <th className="py-2 pr-2">Nama</th>
                         <th className="py-2 pr-2">Alamat</th>
-                        <th className="py-2 pr-2">Gender</th>
+                        <th className="py-2 pr-2">Jenis Kelamin</th>
                         <th className="py-2 text-right">Aksi</th>
                       </tr>
                     </thead>
@@ -711,7 +717,7 @@ export default function AdminPage() {
                         <tr key={p.id} className="border-b border-[hsl(var(--border))/0.7] last:border-b-0">
                           <td className="py-3 pr-2 font-semibold">{p.name}</td>
                           <td className="py-3 pr-2 text-[hsl(var(--muted-foreground))]">{p.address ?? "-"}</td>
-                          <td className="py-3 pr-2">{p.gender ?? "N/A"}</td>
+                          <td className="py-3 pr-2">{genderLabel(p.gender)}</td>
                           <td className="py-3 text-right">
                             <div className="flex justify-end gap-1">
                               <Button size="sm" variant="ghost" className="gap-1" onClick={() => openEditParticipant(p)}>
@@ -808,19 +814,19 @@ export default function AdminPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="site-label block">Jenis Kelamin (L/P)</label>
-            <Input
+            <label className="site-label block" htmlFor="edit-participant-gender">
+              Jenis Kelamin
+            </label>
+            <select
+              id="edit-participant-gender"
+              className="site-select w-full"
               value={editParticipantGender}
-              onChange={(e) => {
-                const val = e.target.value.toUpperCase();
-                if (val === "L" || val === "P") {
-                  setEditParticipantGender(val);
-                } else if (val === "") {
-                  setEditParticipantGender("");
-                }
-              }}
-              placeholder="L atau P (kosongkan jika tidak diketahui)"
-            />
+              onChange={(e) => setEditParticipantGender(e.target.value as "L" | "P" | "")}
+            >
+              <option value="">Belum diketahui</option>
+              <option value="L">Laki-laki</option>
+              <option value="P">Perempuan</option>
+            </select>
           </div>
           <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
             <Button variant="outline" onClick={() => setEditParticipantOpen(false)} disabled={savingParticipant} className="w-full sm:w-auto">

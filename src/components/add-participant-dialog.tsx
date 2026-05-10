@@ -76,27 +76,41 @@ export function AddParticipantDialog({ open, initialName, onOpenChange, onCreate
       open={open}
       onOpenChange={onOpenChange}
       title="Tambah Peserta Baru"
-      description="Lengkapi data peserta jika tersedia."
+      description="Nama wajib diisi. Alamat dan jenis kelamin boleh dikosongkan."
     >
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Nama</Label>
-          <Input id="name" value={name} onChange={(event) => setName(event.target.value)} />
+          <Input
+            id="name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Contoh: Ahmad Fauzi"
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="address">Alamat</Label>
-          <Input id="address" value={address} onChange={(event) => setAddress(event.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="gender">Gender (L/P)</Label>
           <Input
-            id="gender"
-            value={gender}
-            maxLength={1}
-            onChange={(event) => setGender(event.target.value.toUpperCase() as "L" | "P" | "")}
+            id="address"
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+            placeholder="Opsional"
           />
         </div>
-        <Button className="w-full" onClick={submit} disabled={loading}>
+        <div className="space-y-2">
+          <Label htmlFor="gender">Jenis Kelamin</Label>
+          <select
+            id="gender"
+            className="site-select w-full"
+            value={gender}
+            onChange={(event) => setGender(event.target.value as "L" | "P" | "")}
+          >
+            <option value="">Belum diketahui</option>
+            <option value="L">Laki-laki</option>
+            <option value="P">Perempuan</option>
+          </select>
+        </div>
+        <Button className="h-12 w-full" onClick={submit} disabled={loading}>
           {loading ? "Menyimpan..." : "Simpan"}
         </Button>
       </div>

@@ -166,7 +166,7 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
         <div>
           <p className="site-label">Undian Hadiah</p>
           <h3 className="site-title mt-1 text-xl text-[hsl(var(--foreground))] md:text-2xl">
-            Lucky Draw Pilih Pekan
+            Undian Hadiah Pekanan
           </h3>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
@@ -197,7 +197,7 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
             className="w-full gap-2 sm:w-auto"
           >
             <RotateCcw size={14} />
-            {loading ? "Memuat..." : "Muat Ulang Data"}
+            {loading ? "Memuat..." : "Muat Ulang"}
           </Button>
         </div>
       </div>
@@ -213,7 +213,7 @@ export function LuckyDrawCard({ className }: LuckyDrawCardProps) {
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
         <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))/0.92] p-4 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.38)]">
-          <p className="site-label">Nama Yang Sedang Diundi</p>
+          <p className="site-label">Nama yang diundi</p>
           <p
             className={cn(
               "mt-2 min-h-[2.5rem] text-2xl font-bold leading-tight text-[hsl(var(--foreground))]",

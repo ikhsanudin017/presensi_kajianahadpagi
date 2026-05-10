@@ -73,8 +73,7 @@ export function ComboboxResponsive({
   }, [open]);
 
   const listContent = (
-    <Command className="rounded-[20px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-lg">
-      {/* Search Input dengan Icon */}
+    <Command className="rounded-[calc(var(--radius)+2px)] border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-lg">
       <div className="relative border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
         <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
         <CommandInput
@@ -86,7 +85,6 @@ export function ComboboxResponsive({
         />
       </div>
       
-      {/* Results Counter */}
       <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[hsl(var(--primary))/0.15]">
@@ -103,7 +101,6 @@ export function ComboboxResponsive({
         )}
       </div>
       
-      {/* List Items */}
       <CommandList className="combobox-command-list bg-[hsl(var(--card))] p-3">
         {loading ? (
           <CommandEmpty>
@@ -131,7 +128,7 @@ export function ComboboxResponsive({
                     }}
                   >
                     <Plus size={16} />
-                    Tambah &quot;{query.trim()}&quot;
+                    Tambah nama baru
                   </Button>
                 ) : null}
               </div>
@@ -141,7 +138,7 @@ export function ComboboxResponsive({
                 <CommandItem
                   key={option.value}
                   value={option.label}
-                  className="combobox-item group mb-2 cursor-pointer rounded-xl border border-[hsl(var(--border))/0.3] bg-[hsl(var(--card))] px-4 py-3.5 transition-all hover:border-[hsl(var(--primary))/0.3] hover:bg-[hsl(var(--primary))/0.06] hover:shadow-sm active:scale-[0.98]"
+                  className="combobox-item group mb-2 cursor-pointer rounded-[calc(var(--radius)+1px)] border border-[hsl(var(--border))/0.55] bg-[hsl(var(--card))] px-4 py-3 transition-all hover:border-[hsl(var(--primary))/0.3] hover:bg-[hsl(var(--primary))/0.06] hover:shadow-sm"
                   onSelect={() => {
                     onSelect(option.value);
                     onOpenChange(false);
@@ -190,7 +187,7 @@ export function ComboboxResponsive({
       type="button"
       variant="outline"
       className={cn(
-        "h-14 w-full justify-between gap-3 rounded-2xl border-2 bg-[hsl(var(--card))] px-4 font-semibold shadow-sm transition-all hover:border-primary/40 hover:bg-[hsl(var(--muted))/0.1] hover:shadow-md",
+        "h-14 w-full justify-between gap-3 rounded-[calc(var(--radius)+2px)] border-2 bg-[hsl(var(--card))] px-4 font-semibold shadow-sm transition-all hover:border-primary/40 hover:bg-[hsl(var(--muted))/0.1] hover:shadow-md",
         open && "border-primary/60 bg-[hsl(var(--muted))/0.15] shadow-md",
         triggerClassName
       )}

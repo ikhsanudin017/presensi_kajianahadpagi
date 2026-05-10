@@ -55,12 +55,11 @@ export function ResponsiveDialog({
         className={cn(
           "p-0 shadow-2xl bg-[hsl(var(--card))]",
           isMobile
-            ? "bottom-0 left-1/2 top-auto w-[100vw] max-w-none -translate-x-1/2 -translate-y-0 rounded-b-none rounded-t-[28px] border-x-0 border-b-0"
-            : "w-[94vw] max-w-xl rounded-[24px]",
+            ? "bottom-0 left-1/2 top-auto w-[100vw] max-w-none -translate-x-1/2 -translate-y-0 rounded-b-none rounded-t-[18px] border-x-0 border-b-0"
+            : "w-[94vw] max-w-xl rounded-[calc(var(--radius)+4px)]",
           contentClassName
         )}
       >
-        {/* Handle Bar untuk Mobile */}
         {isMobile && (
           <div className="flex justify-center pb-2 pt-3">
             <div className="h-1.5 w-12 rounded-full bg-muted-foreground/30"></div>
@@ -69,7 +68,7 @@ export function ResponsiveDialog({
 
         {!hideCloseButton ? (
           <DialogClose className={cn(
-            "absolute right-4 top-4 z-10 rounded-full border-2 border-[hsl(var(--border))] bg-[hsl(var(--card))/0.95] p-2 text-[hsl(var(--muted-foreground))] shadow-md backdrop-blur-sm transition-all hover:border-primary/40 hover:bg-white hover:text-[hsl(var(--foreground))] hover:shadow-lg",
+            "absolute right-4 top-4 z-10 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))/0.95] p-2 text-[hsl(var(--muted-foreground))] shadow-md backdrop-blur-sm transition-all hover:border-primary/40 hover:bg-white hover:text-[hsl(var(--foreground))] hover:shadow-lg",
             isMobile && "right-3 top-3"
           )}>
             <X size={16} />
@@ -84,8 +83,8 @@ export function ResponsiveDialog({
           )}>
             {title ? (
               <DialogTitle className={cn(
-                "font-[var(--font-display)] text-2xl font-bold text-[hsl(var(--foreground))]",
-                !isMobile && "text-3xl"
+                "font-[var(--font-display)] text-2xl font-bold leading-tight text-[hsl(var(--foreground))]",
+                !isMobile && "text-[1.7rem]"
               )}>
                 {title}
               </DialogTitle>

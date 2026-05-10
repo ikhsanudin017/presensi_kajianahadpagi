@@ -4,7 +4,7 @@ import * as React from "react";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
-import { Trash2, Calendar, UserCheck, UserPlus, RefreshCw } from "lucide-react";
+import { Trash2, Calendar, CheckCircle2, ClipboardCheck, UserCheck, UserPlus, RefreshCw } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { ParticipantCombobox, type Participant } from "@/components/participant-combobox";
 import { AddParticipantDialog } from "@/components/add-participant-dialog";
@@ -133,48 +133,37 @@ export default function HomePage() {
     <PinGate>
       <SiteShell>
         <PageShell
-          eyebrow="Form Presensi"
-          title="Presensi Kajian Ahad Pagi"
+          eyebrow="Presensi"
+          title="Catat Kehadiran Jamaah"
           description={
             <>
-              Hari ini: <span className="font-semibold text-[hsl(var(--foreground))]">{today}</span>
+              Hari ini <span className="font-semibold text-[hsl(var(--foreground))]">{today}</span>. Data tersimpan
+              pada tanggal kajian yang dipilih.
             </>
           }
         >
-          <div className="grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-stretch">
-            {/* Form Input Presensi */}
-            <div className="rounded-[22px] border border-border/75 bg-gradient-to-br from-card/70 via-card/60 to-card/50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),_0_8px_24px_-12px_rgba(0,0,0,0.08)] sm:rounded-[28px] sm:p-6">
-              <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-border/65 bg-gradient-to-r from-muted/40 to-muted/25 px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <Calendar size={16} />
-                  </div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
-                    Input Presensi
-                  </p>
-                </div>
-                <span className="rounded-full border border-primary/30 bg-gradient-to-r from-primary/15 to-primary/10 px-3 py-1.5 text-[11px] font-bold text-primary shadow-sm">
-                  Langkah 1/2
-                </span>
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-1">
-                <div className="space-y-2.5">
-              <div className="flex items-center gap-2">
-                <Calendar size={14} className="text-primary" />
-                <p className="site-label">Tanggal Kajian</p>
-              </div>
-              <Input 
-                type="date" 
-                value={sessionDate} 
-                onChange={(e) => setSessionDate(e.target.value)} 
-                className="h-12 w-full shadow-sm sm:h-11" 
-              />
-                </div>
-
-                <div className="space-y-2.5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="site-stat space-y-2.5">
                   <div className="flex items-center gap-2">
-                    <UserCheck size={14} className="text-primary" />
+                    <Calendar size={15} className="text-primary" />
+                    <label className="site-label" htmlFor="session-date">
+                      Tanggal Kajian
+                    </label>
+                  </div>
+                  <Input
+                    id="session-date"
+                    type="date"
+                    value={sessionDate}
+                    onChange={(e) => setSessionDate(e.target.value)}
+                    className="shadow-sm"
+                  />
+                </div>
+
+                <div className="site-stat space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <UserCheck size={15} className="text-primary" />
                     <p className="site-label">Nama Peserta</p>
                   </div>
                   <ParticipantCombobox
@@ -190,68 +179,79 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-border/70 bg-gradient-to-r from-card/80 to-card/60 px-4 py-3.5 text-sm shadow-sm">
+              <div className="rounded-[calc(var(--radius)+2px)] border border-[hsl(var(--border))] bg-[hsl(var(--card))/0.88] px-4 py-4">
                 {selected ? (
-                  <div className="flex items-center gap-2">
-                    <UserCheck size={16} className="text-primary" />
-                    <span className="text-muted-foreground">Peserta dipilih:</span>
-                    <span className="font-bold text-[hsl(var(--foreground))]">{selected.name}</span>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <CheckCircle2 size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="site-label">Siap Dicatat</p>
+                      <p className="mt-1 truncate text-lg font-bold text-[hsl(var(--foreground))]">{selected.name}</p>
+                      <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Tanggal: {sessionDate}</p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <UserCheck size={16} className="opacity-50" />
-                    <span>Belum ada peserta dipilih</span>
+                  <div className="flex items-start gap-3 text-[hsl(var(--muted-foreground))]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/70">
+                      <UserCheck size={20} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-[hsl(var(--foreground))]">Belum ada peserta dipilih</p>
+                      <p className="mt-1 text-sm">Cari nama jamaah atau tambah nama baru jika belum terdaftar.</p>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Panel Aksi */}
-            <div className="flex flex-col rounded-[22px] border border-border/75 bg-gradient-to-br from-card/65 via-card/55 to-card/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.42),_0_8px_24px_-12px_rgba(0,0,0,0.08)] sm:rounded-[28px] sm:p-6">
-              <p className="site-label mb-4 flex items-center gap-2">
-                <UserCheck size={14} />
-                Aksi Presensi
+            <aside className="site-soft-card p-4">
+              <p className="site-label mb-3 flex items-center gap-2">
+                <ClipboardCheck size={14} />
+                Aksi
               </p>
-              <div className="flex flex-col gap-2.5 sm:gap-3">
-                <Button 
-                  onClick={markAttendance} 
-                  disabled={loading || !selected} 
-                  className="h-14 w-full text-base font-bold shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 sm:h-12"
+              <div className="grid gap-3">
+                <Button
+                  onClick={markAttendance}
+                  disabled={loading || !selected}
+                  className="h-14 w-full text-base font-bold shadow-lg"
                   size="lg"
                 >
                   {loading ? (
-                    <div className="flex items-center gap-2">
+                    <>
                       <RefreshCw size={18} className="animate-spin" />
-                      <span>Menyimpan...</span>
-                    </div>
+                      Menyimpan...
+                    </>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <>
                       <UserCheck size={18} />
-                      <span>Hadir</span>
-                    </div>
+                      Catat Hadir
+                    </>
                   )}
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-12 w-full font-semibold transition-all hover:scale-[1.01] active:scale-[0.98] sm:h-11"
+                  className="h-12 w-full font-semibold"
                   onClick={() => {
                     setPresetName("");
                     setModalOpen(true);
                   }}
                 >
-                  <div className="flex items-center gap-2">
-                    <UserPlus size={16} />
-                    <span>Tambah Nama Baru</span>
-                  </div>
+                  <UserPlus size={16} />
+                  Tambah Nama Baru
                 </Button>
               </div>
-              <div className="mt-4 rounded-xl border border-border/60 bg-gradient-to-br from-muted/40 to-muted/25 px-4 py-3.5">
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Tip: <span className="font-semibold">Petunjuk:</span> Pilih peserta dari dropdown, lalu klik tombol{" "}
-                  <span className="font-bold text-[hsl(var(--primary))]">Hadir</span> untuk mencatat presensi pada tanggal aktif.
-                </p>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-[calc(var(--radius)+1px)] border border-[hsl(var(--border))] bg-muted/35 px-3 py-3">
+                  <p className="site-label">Hadir</p>
+                  <p className="mt-1 text-2xl font-bold text-[hsl(var(--foreground))]">{attendance.length}</p>
+                </div>
+                <div className="rounded-[calc(var(--radius)+1px)] border border-[hsl(var(--border))] bg-muted/35 px-3 py-3">
+                  <p className="site-label">Tanggal</p>
+                  <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{sessionDate}</p>
+                </div>
               </div>
-            </div>
+            </aside>
           </div>
         </PageShell>
 
@@ -262,18 +262,18 @@ export default function HomePage() {
           onDetectedDate={setSessionDate}
         />
 
-        <section className="site-soft-card mt-6 p-4 sm:mt-8 sm:p-5 md:p-7">
+        <section className="site-soft-card mt-6 p-4 sm:mt-8 sm:p-5 md:p-6">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <UserCheck size={20} className="text-primary" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">
-                  Presensi {sessionDate}
+                  Daftar Hadir
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {attendance.length} {attendance.length === 1 ? 'peserta' : 'peserta'} hadir
+                  {sessionDate} - {attendance.length} peserta hadir
                 </p>
               </div>
             </div>
@@ -281,34 +281,36 @@ export default function HomePage() {
               variant="outline" 
               size="sm" 
               onClick={refreshAttendance}
-              className="gap-2 font-semibold"
+              className="w-full gap-2 font-semibold sm:w-auto"
             >
               <RefreshCw size={14} />
               Refresh
             </Button>
           </div>
 
-          <div className="mt-5 max-h-[min(60vh,560px)] space-y-3 overflow-y-auto pr-1.5">
+          <div className="mt-5 max-h-[min(62vh,560px)] space-y-3 overflow-y-auto pr-1">
             {attendance.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 py-12 text-center">
+              <div className="rounded-[calc(var(--radius)+2px)] border border-dashed border-border/80 bg-muted/25 px-5 py-10 text-center">
                 <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-muted/50">
                   <UserCheck size={28} className="text-muted-foreground/50" />
                 </div>
                 <p className="text-base font-semibold text-muted-foreground">Belum ada presensi untuk tanggal ini</p>
-                <p className="mt-1 text-sm text-muted-foreground/70">Mulai tandai kehadiran jamaah</p>
+                <p className="mt-1 text-sm text-muted-foreground/70">Nama yang dicatat akan muncul di sini.</p>
               </div>
             ) : (
               attendance.map((item, index) => (
                 <div
                   key={item.id}
-                  className="group site-card-list-row flex flex-col gap-3 px-5 py-4 transition-all hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
+                  className="group site-card-list-row flex flex-col gap-3 px-4 py-4 transition-all hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-primary/5 font-bold text-primary">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
                       {index + 1}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-bold text-[hsl(var(--foreground))] text-base">{item.participant.name}</p>
+                      <p className="truncate font-bold text-[hsl(var(--foreground))] text-base">
+                        {item.participant.name}
+                      </p>
                       <div className="flex items-center gap-1.5 mt-1">
                         <Calendar size={12} className="text-muted-foreground" />
                         <p className="text-xs text-[hsl(var(--muted-foreground))]">
@@ -319,7 +321,7 @@ export default function HomePage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-gradient-to-r from-primary/15 to-primary/10 px-3 py-1.5 text-xs font-bold text-primary">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary">
                       <UserCheck size={12} />
                       Hadir
                     </span>

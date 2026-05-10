@@ -461,13 +461,12 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
       <div className="flex flex-col gap-2">
         <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-primary">
           <ScanLine size={14} />
-          Scan OCR Presensi
+          Scan Foto Presensi
         </div>
         <div>
-          <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">Scan Foto Presensi Otomatis</h3>
+          <h3 className="site-title text-xl text-[hsl(var(--foreground))] md:text-2xl">Baca Foto Presensi</h3>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            Upload foto, tempel dari clipboard, atau ambil dari kamera. Sistem akan memproses OCR dan AI dulu, lalu
-            menampilkan daftar review. Presensi baru hanya disimpan setelah Anda klik tombol simpan review.
+            Unggah foto, tempel gambar, atau ambil dari kamera. Hasil scan tetap masuk ke daftar review sebelum disimpan.
           </p>
         </div>
       </div>
@@ -525,15 +524,16 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
               files.map((file) => (
                 <div
                   key={`${file.name}-${file.lastModified}`}
-                  className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+                  className="inline-flex max-w-full items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
                 >
-                  <span>{file.name}</span>
+                  <span className="max-w-[min(18rem,70vw)] truncate">{file.name}</span>
                   <button
                     type="button"
                     onClick={() =>
                       setFiles((current) => current.filter((item) => fileSignature(item) !== fileSignature(file)))
                     }
                     className="rounded-full text-primary/80 transition hover:text-primary"
+                    aria-label={`Hapus ${file.name}`}
                   >
                     <X size={12} />
                   </button>
@@ -571,7 +571,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
             className="h-12 w-full"
           >
             {loading ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
-            {loading ? `Memproses ${scanProgress}%` : "Scan & Review"}
+            {loading ? `Memproses ${scanProgress}%` : "Scan dan Review"}
           </Button>
           <Button
             variant="secondary"
@@ -728,7 +728,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
                               {statusLabel(item.saveStatus)}
                             </span>
                             <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                              Hal. {item.pageNumber}{item.rowNumber ? ` • Baris ${item.rowNumber}` : ""}
+                              Hal. {item.pageNumber}{item.rowNumber ? ` - Baris ${item.rowNumber}` : ""}
                             </span>
                             <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
                               Confidence {confidenceLabel(item.confidence)}
@@ -739,7 +739,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
                             Metode: <span className="font-medium text-[hsl(var(--foreground))]">{resolutionMethodLabel(item.resolutionMethod)}</span>
-                            {typeof item.matchScore === "number" ? ` • skor ${item.matchScore.toFixed(2)}` : ""}
+                            {typeof item.matchScore === "number" ? ` - skor ${item.matchScore.toFixed(2)}` : ""}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">{item.reason}</p>
                         </div>
@@ -772,7 +772,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold text-[hsl(var(--foreground))]">{item.sourceName}</p>
                         <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                          Hal. {item.pageNumber}{item.rowNumber ? ` • Baris ${item.rowNumber}` : ""}
+                          Hal. {item.pageNumber}{item.rowNumber ? ` - Baris ${item.rowNumber}` : ""}
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">{item.reason}</p>
