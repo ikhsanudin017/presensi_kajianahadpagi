@@ -34,6 +34,7 @@ export type DetectedAttendanceCandidate = {
   confidence: "high" | "medium" | "low";
   reason: string;
   addressHint?: string;
+  signatureStatus?: "signed" | "empty" | "uncertain";
 };
 
 export type AttendanceOcrScanResult = {

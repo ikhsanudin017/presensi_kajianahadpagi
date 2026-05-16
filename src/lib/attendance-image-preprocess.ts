@@ -8,6 +8,7 @@ export type PreparedAttendanceScanImage = {
   visionImageBase64: string;
   fullImageBase64: string;
   headerImageBase64: string;
+  signatureImageBase64: string;
 };
 
 const TABLE_LEFT_COLUMNS_RATIO = 0.64;
@@ -72,6 +73,17 @@ async function preprocessForTesseract(buffer: Buffer) {
     .toBuffer();
 }
 
+async function preprocessForSignatureDetection(buffer: Buffer) {
+  return sharp(buffer)
+    .resize({ width: 2400, withoutEnlargement: true })
+    .grayscale()
+    .normalize()
+    .sharpen({ sigma: 1.2 })
+    .threshold(188)
+    .png()
+    .toBuffer();
+}
+
 export async function prepareAttendanceScanImages(params: {
   images: AttendanceScanImageInput[];
   onProgress?: (progress: {
@@ -101,11 +113,12 @@ export async function prepareAttendanceScanImages(params: {
       .jpeg({ quality: 90, chromaSubsampling: "4:4:4" })
       .toBuffer();
 
-    const [headerImage, fullImage, visionImage, ocrImage] = await Promise.all([
+    const [headerImage, fullImage, visionImage, ocrImage, signatureImage] = await Promise.all([
       extractHeaderCrop(normalizedBuffer),
       preprocessForGemini(normalizedBuffer),
       preprocessForVision(normalizedBuffer),
       preprocessForTesseract(normalizedBuffer),
+      preprocessForSignatureDetection(normalizedBuffer),
     ]);
 
     prepared.push({
@@ -119,6 +132,7 @@ export async function prepareAttendanceScanImages(params: {
       visionImageBase64: toBase64(visionImage),
       fullImageBase64: toBase64(fullImage),
       headerImageBase64: toBase64(headerImage),
+      signatureImageBase64: toBase64(signatureImage),
     });
   }
 

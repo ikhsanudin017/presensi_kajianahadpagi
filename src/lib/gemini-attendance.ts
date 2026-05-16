@@ -23,6 +23,11 @@ export type AttendanceGeminiScanResult = AttendanceOcrScanResult & {
   previewText: string;
 };
 
+export type AttendanceGeminiAvailability = {
+  ok: boolean;
+  reason?: string;
+};
+
 type GeminiExtractedRow = {
   rowNumber?: number | null;
   name?: string | null;
@@ -65,6 +70,81 @@ function toGeminiEndpoint() {
   const models = Array.from(new Set([preferredModel, ...fallbackModels]));
 
   return { apiKey, models };
+}
+
+async function callGeminiHealthCheck(apiKey: string, model: string) {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: "Reply with exactly: OK" }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+        },
+      }),
+    },
+  );
+
+  const payload = (await response.json().catch(() => ({}))) as GeminiGenerateContentResponse;
+  if (!response.ok) {
+    const message = payload?.error?.message || `GEMINI_REQUEST_FAILED_${model}_${response.status}`;
+    throw new Error(message);
+  }
+
+  const text = extractGeminiText(payload);
+  if (text.trim().toUpperCase() !== "OK") {
+    throw new Error("GEMINI_HEALTHCHECK_UNEXPECTED_RESPONSE");
+  }
+}
+
+function getGeminiErrorReason(message: string) {
+  const lower = message.toLowerCase();
+
+  if (message === "GEMINI_API_KEY_MISSING") {
+    return "Gemini API key belum diisi.";
+  }
+  if (lower.includes("quota") || lower.includes("rate limit") || lower.includes("429")) {
+    return "Gemini tidak aktif karena kuota atau rate limit habis.";
+  }
+  if (lower.includes("api key not valid") || lower.includes("permission denied") || lower.includes("forbidden")) {
+    return "Gemini menolak API key. Cek key dan project.";
+  }
+
+  return `Gemini gagal: ${message}`;
+}
+
+export async function checkGeminiAvailability(): Promise<AttendanceGeminiAvailability> {
+  const endpoint = toGeminiEndpoint();
+  if (!endpoint) {
+    return {
+      ok: false,
+      reason: "Gemini API key belum diisi.",
+    };
+  }
+
+  let lastError = "GEMINI_REQUEST_FAILED";
+  for (const model of endpoint.models) {
+    try {
+      await callGeminiHealthCheck(endpoint.apiKey, model);
+      return { ok: true };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "GEMINI_REQUEST_FAILED";
+    }
+  }
+
+  return {
+    ok: false,
+    reason: getGeminiErrorReason(lastError),
+  };
 }
 
 function tryParseJsonObject(raw: string) {
@@ -115,19 +195,38 @@ async function extractStructuredRowsFromImage(params: {
       : "";
 
   const prompt = [
-    "Anda membaca foto daftar presensi tulisan tangan Kajian Ahad Pagi.",
-    "Tugas utama: ekstrak semua nama peserta dari kolom NAMA.",
-    "Jika di header terlihat tanggal, isi displayDate sesuai tulisan asli dan detectedDate dalam format YYYY-MM-DD.",
-    "Fokus pada kolom nomor urut dan nama. Abaikan alamat, nomor telepon, dan tanda tangan.",
-    "Jika nomor baris terlihat, isi rowNumber sebagai angka.",
-    "Jika ejaan nama jelas salah karena OCR, rapikan menjadi nama manusia yang paling masuk akal tanpa mengarang.",
-    "Jangan memasukkan teks acak, judul tabel, atau isi alamat sebagai nama.",
-    "normalizedTranscript berisi ringkasan hasil baca yang rapi untuk ditampilkan ke user.",
-    participantHint,
-    "Gunakan gambar sebagai sumber utama. OCR Vision di bawah hanya bantuan tambahan.",
-    `OCR bantuan:\n${params.image.visionText?.trim() || "(tidak ada OCR bantuan)"}`,
-    "Keluarkan hanya JSON valid dengan struktur ini:",
-    '{"displayDate":"Ahad 19 April 2026","detectedDate":"2026-04-19","normalizedTranscript":"1. Dina A\\n2. Yuli Maryani","rows":[{"rowNumber":1,"name":"Dina A","addressHint":"","confidence":0.94}],"notes":""}',
+    "Anda adalah asisten OCR ahli yang membaca foto daftar presensi tulisan tangan.",
+    "",
+    "## TUGAS UTAMA",
+    "Baca SEMUA baris dari tabel presensi dalam foto ini, dari baris pertama sampai baris TERAKHIR.",
+    "Anda WAJIB membaca SETIAP baris tanpa ada yang terlewat.",
+    "",
+    "## ATURAN PENTING",
+    "1. Baca SEMUA baris dari atas ke bawah. JANGAN berhenti di tengah.",
+    "2. Jika ada 51 baris di foto, keluarkan 51 baris. Jika ada 30 baris, keluarkan 30 baris. Sesuaikan dengan jumlah baris yang terlihat.",
+    "3. Fokus pada kolom NOMOR URUT, NAMA, dan TTD.",
+    "4. Hanya masukkan baris yang kolom TTD-nya berisi coretan/tanda tangan. Jika TTD kosong, anggap peserta tidak hadir dan jangan masukkan ke rows.",
+    "5. Kolom alamat boleh diisi di addressHint jika terbaca.",
+    "5. Jika nomor baris terlihat (1, 2, 3, dst.), isi rowNumber sebagai angka integer.",
+    "6. Baca nama persis seperti yang tertulis. Jika tulisan tangan kurang jelas, berikan tebakan terbaik.",
+    "7. JANGAN mengarang nama yang tidak ada di foto.",
+    "8. JANGAN memasukkan judul tabel, header kolom, atau teks bukan nama sebagai baris.",
+    "9. Jika di header terlihat tanggal, isi displayDate sesuai tulisan asli dan detectedDate dalam format YYYY-MM-DD.",
+    "10. normalizedTranscript berisi ringkasan semua baris dalam format: '1. Nama\\n2. Nama\\n...' untuk ditampilkan ke user.",
+    "",
+    "## VERIFIKASI",
+    "Setelah selesai membaca, hitung jumlah baris yang Anda ekstrak.",
+    "Pastikan jumlahnya sesuai dengan jumlah baris bernomor yang terlihat di foto.",
+    "Jika ada baris yang terlewat, TAMBAHKAN sebelum menghasilkan output.",
+    "",
+    participantHint ? `## REFERENSI PESERTA\n${participantHint}` : "",
+    "",
+    "## OCR BANTUAN (gunakan gambar sebagai sumber utama)",
+    params.image.visionText?.trim() || "(tidak ada OCR bantuan)",
+    "",
+    "## FORMAT OUTPUT",
+    "Keluarkan HANYA JSON valid dengan struktur berikut:",
+    '{"displayDate":"Ahad 19 April 2026","detectedDate":"2026-04-19","normalizedTranscript":"1. Warto\\n2. Hamdani\\n3. Sakiman","rows":[{"rowNumber":1,"name":"Warto","addressHint":"Sawit","confidence":0.94},{"rowNumber":2,"name":"Hamdani","addressHint":"Sawit","confidence":0.92}],"notes":"Total 51 baris terdeteksi"}',
     "confidence bernilai 0..1. Jika tidak yakin pada tanggal, isi null.",
   ]
     .filter(Boolean)
@@ -206,7 +305,8 @@ async function extractStructuredRowsFromImage(params: {
               },
             ],
             generationConfig: {
-              temperature: 0.1,
+              temperature: 0.05,
+              maxOutputTokens: 16384,
               responseMimeType: "application/json",
               responseJsonSchema: schema,
             },
@@ -358,7 +458,10 @@ export async function scanAttendanceImagesWithGemini(params: {
         : null;
 
     if (typeof extracted.result.notes === "string" && extracted.result.notes.trim()) {
-      notes.push(`Gemini halaman ${pageNumber}: ${extracted.result.notes.trim()}`);
+      const note = extracted.result.notes.trim();
+      if (!/^total\s+\d+\s+baris\s+terdeteksi/i.test(note)) {
+        notes.push(`Gemini halaman ${pageNumber}: ${note}`);
+      }
     }
 
     const normalizedTranscript =

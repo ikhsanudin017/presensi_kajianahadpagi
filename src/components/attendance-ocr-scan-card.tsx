@@ -67,22 +67,36 @@ type ScanResponseData = {
   blocked: boolean;
 };
 
-type ScanJobStartResponse = {
-  ok?: boolean;
-  jobId?: string;
-  error?: string;
-  detail?: string;
+type PuterAttendanceRow = {
+  rowNumber?: number | null;
+  name?: string | null;
+  addressHint?: string | null;
+  hasSignature?: boolean | string | null;
+  signatureStatus?: "signed" | "empty" | "uncertain" | string | null;
+  confidence?: number | null;
 };
 
-type ScanJobStatusResponse = {
+type PuterPageResult = {
+  pageNumber: number;
+  displayDate?: string | null;
+  detectedDate?: string | null;
+  normalizedTranscript?: string | null;
+  signedRowNumbers?: Array<number | string> | null;
+  rows?: PuterAttendanceRow[] | null;
+  notes?: string | null;
+};
+
+type PuterSignatureResult = {
+  signedRowNumbers?: Array<number | string> | null;
+  count?: number | null;
+  notes?: string | null;
+};
+
+type PuterResolveResponse = {
   ok?: boolean;
-  data?: {
-    status: "queued" | "running" | "completed" | "failed";
-    progress: number;
-    message: string;
-    result?: ScanResponseData;
-    error?: string;
-  };
+  data?: ScanResponseData;
+  error?: string;
+  detail?: string;
 };
 
 type SaveReviewResponse = {
@@ -110,6 +124,20 @@ type Props = {
   onCompleted?: () => void;
   onDetectedDate?: (date: string) => void;
 };
+
+const PUTER_SCRIPT_SRC = "https://js.puter.com/v2/";
+const PUTER_GEMINI_MODEL = "gemini-2.5-flash";
+const PUTER_RESOLVE_TIMEOUT_MS = 90_000;
+
+declare global {
+  interface Window {
+    puter?: {
+      ai?: {
+        chat?: (...args: unknown[]) => Promise<unknown>;
+      };
+    };
+  }
+}
 
 function fileSignature(file: File) {
   return [file.name || "clipboard-image", file.size, file.type, file.lastModified].join(":");
@@ -235,6 +263,240 @@ function confidenceLabel(confidence: ScanReviewItem["confidence"]) {
   return "Rendah";
 }
 
+function loadPuterScript() {
+  if (window.puter?.ai?.chat) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${PUTER_SCRIPT_SRC}"]`);
+
+    const timeout = window.setTimeout(() => {
+      reject(new Error("PUTER_LOAD_TIMEOUT"));
+    }, 20000);
+
+    const finish = () => {
+      window.clearTimeout(timeout);
+      if (window.puter?.ai?.chat) {
+        resolve();
+      } else {
+        reject(new Error("PUTER_NOT_AVAILABLE"));
+      }
+    };
+
+    if (existing) {
+      existing.addEventListener("load", finish, { once: true });
+      existing.addEventListener("error", () => reject(new Error("PUTER_LOAD_FAILED")), { once: true });
+      if (window.puter?.ai?.chat) {
+        finish();
+      }
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = PUTER_SCRIPT_SRC;
+    script.async = true;
+    script.onload = finish;
+    script.onerror = () => reject(new Error("PUTER_LOAD_FAILED"));
+    document.head.appendChild(script);
+  });
+}
+
+function extractPuterResponseText(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(extractPuterResponseText).filter(Boolean).join("\n");
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.text === "string") {
+      return record.text;
+    }
+    if (typeof record.content === "string") {
+      return record.content;
+    }
+    if (typeof record.message === "string") {
+      return record.message;
+    }
+    if (Array.isArray(record.content)) {
+      return record.content.map(extractPuterResponseText).filter(Boolean).join("\n");
+    }
+    const message = record.message;
+    if (message) {
+      const text = extractPuterResponseText(message);
+      if (text) {
+        return text;
+      }
+    }
+    const output = record.output;
+    if (output) {
+      const text = extractPuterResponseText(output);
+      if (text) {
+        return text;
+      }
+    }
+    const choices = record.choices;
+    if (choices) {
+      const text = extractPuterResponseText(choices);
+      if (text) {
+        return text;
+      }
+    }
+  }
+
+  return "";
+}
+
+function parseJsonObject<T>(raw: string): T | null {
+  const cleaned = raw.trim();
+  const fenced = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const jsonText = (fenced?.[1] || cleaned).trim();
+  const firstObject = jsonText.indexOf("{");
+  const lastObject = jsonText.lastIndexOf("}");
+
+  if (firstObject < 0 || lastObject <= firstObject) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(jsonText.slice(firstObject, lastObject + 1)) as T;
+  } catch {
+    return null;
+  }
+}
+
+function buildPuterPrompt(pageNumber: number, mode: "signature" | "allRows" = "signature") {
+  const fallbackInstructions =
+    mode === "allRows"
+      ? [
+          "Mode fallback: jika kolom TTD sulit dipastikan, tetap masukkan semua baris nama yang terlihat.",
+          'Gunakan signatureStatus "uncertain" bila tanda tangan/coretan pada baris itu tidak jelas.',
+        ]
+      : [
+          "Masukkan semua baris yang memiliki nama peserta, baik TTD terisi, kosong, maupun ragu.",
+          "Jangan membuang baris hanya karena status TTD sulit dibaca.",
+        ];
+
+  return [
+    "Anda membaca foto lembar presensi pengajian.",
+    "Fokus hanya pada kolom No, Nama, Alamat, dan TTD.",
+    "Untuk setiap baris nama, tentukan status kolom TTD pada baris yang sama.",
+    'signatureStatus harus salah satu: "signed", "empty", atau "uncertain".',
+    "hasSignature true hanya jika kolom TTD pada baris itu berisi tanda tangan/coretan/tulisan.",
+    "hasSignature false jika kolom TTD jelas kosong.",
+    "hasSignature null jika status TTD ragu atau terhalang.",
+    ...fallbackInstructions,
+    "Jangan menebak nama dari alamat, nomor telepon, header, atau tanda tangan.",
+    "Baca semua baris peserta yang terlihat, termasuk jika jumlahnya banyak.",
+    "Rapikan ejaan nama hanya jika sangat jelas dari tulisan cetak pada kolom Nama.",
+    "Keluarkan hanya JSON valid tanpa markdown.",
+    "Schema:",
+    '{"displayDate":null,"detectedDate":null,"normalizedTranscript":"1. Warto\\n2. Hamdani","rows":[{"rowNumber":1,"name":"Warto","addressHint":"Sawit","hasSignature":true,"signatureStatus":"signed","confidence":0.96},{"rowNumber":2,"name":"Hamdani","addressHint":"Sawit","hasSignature":null,"signatureStatus":"uncertain","confidence":0.82}],"notes":""}',
+    `Nomor halaman gambar ini: ${pageNumber}.`,
+  ].join("\n");
+}
+
+function buildPuterSignaturePrompt(pageNumber: number) {
+  return [
+    "Anda membaca foto lembar presensi pengajian.",
+    "Tugas ini hanya menentukan nomor baris yang benar-benar memiliki tanda tangan/coretan/tulisan pada kolom TTD.",
+    "Lihat kolom TTD paling kanan saja. Cocokkan coretan/tanda tangan dengan nomor baris di kiri.",
+    "Jangan hitung garis tabel, bayangan, noda kertas, atau tulisan pada kolom Nama/Alamat/No TLPHN.",
+    "Jangan hitung baris jika kolom TTD pada baris itu kosong atau hanya terkena garis dari tanda tangan baris lain.",
+    "Jika tanda tangan melewati batas garis, pilih baris yang pusat coretannya paling dominan berada di sel TTD tersebut.",
+    "Keluarkan hanya JSON valid tanpa markdown.",
+    'Schema: {"signedRowNumbers":[1,3,5],"count":3,"notes":""}',
+    `Nomor halaman gambar ini: ${pageNumber}.`,
+  ].join("\n");
+}
+
+function normalizeSignedRowNumbers(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .map((item) => {
+          if (typeof item === "number" && Number.isFinite(item)) {
+            return Math.round(item);
+          }
+          if (typeof item === "string") {
+            const match = item.match(/\d+/);
+            return match ? Number(match[0]) : NaN;
+          }
+          return NaN;
+        })
+        .filter((item) => Number.isInteger(item) && item > 0 && item <= 300),
+    ),
+  ).sort((left, right) => left - right);
+}
+
+async function requestPuterGeminiPage(file: File, pageNumber: number, mode: "signature" | "allRows") {
+  const response = await window.puter?.ai?.chat?.(
+    buildPuterPrompt(pageNumber, mode),
+    file,
+    { model: PUTER_GEMINI_MODEL },
+  );
+  const text = extractPuterResponseText(response);
+  return parseJsonObject<Omit<PuterPageResult, "pageNumber">>(text);
+}
+
+async function requestPuterSignedRows(file: File, pageNumber: number) {
+  const response = await window.puter?.ai?.chat?.(
+    buildPuterSignaturePrompt(pageNumber),
+    file,
+    { model: PUTER_GEMINI_MODEL },
+  );
+  const text = extractPuterResponseText(response);
+  const parsed = parseJsonObject<PuterSignatureResult>(text);
+  return normalizeSignedRowNumbers(parsed?.signedRowNumbers);
+}
+
+async function scanFileWithPuterGemini(file: File, pageNumber: number) {
+  let parsed = await requestPuterGeminiPage(file, pageNumber, "signature");
+  const signedRowNumbers = await requestPuterSignedRows(file, pageNumber).catch((error) => {
+    console.error("PUTER_SIGNATURE_ROWS_FAILED", error);
+    return [] as number[];
+  });
+
+  if (!parsed || !Array.isArray(parsed.rows)) {
+    throw new Error("PUTER_GEMINI_PARSE_FAILED");
+  }
+
+  const readableRows = parsed.rows.filter((row) => row?.name);
+  if (readableRows.length === 0) {
+    const fallbackParsed = await requestPuterGeminiPage(file, pageNumber, "allRows");
+    if (fallbackParsed && Array.isArray(fallbackParsed.rows) && fallbackParsed.rows.some((row) => row?.name)) {
+      parsed = {
+        ...fallbackParsed,
+        notes: [parsed.notes, fallbackParsed.notes, "Fallback semua baris nama dipakai karena hasil awal kosong."]
+          .filter(Boolean)
+          .join(" "),
+      };
+    }
+  }
+
+  const rows = Array.isArray(parsed.rows) ? parsed.rows : [];
+  return {
+    pageNumber,
+    ...parsed,
+    signedRowNumbers,
+    notes: [
+      parsed.notes,
+      signedRowNumbers.length > 0 ? `Scan TTD membaca ${signedRowNumbers.length} baris bertanda tangan.` : null,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    rows: rows.filter((row) => row?.name),
+  } satisfies PuterPageResult;
+}
+
 export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDetectedDate }: Props) {
   const { showToast } = useToast();
   const cameraInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -297,65 +559,63 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
     setSelectedIds([]);
 
     try {
-      const formData = new FormData();
-      formData.append("eventDate", eventDate);
-      for (const file of files) {
-        formData.append("images", file);
+      setScanProgress(5);
+      setScanMessage("Memuat Puter Gemini...");
+      await loadPuterScript();
+
+      const pages: PuterPageResult[] = [];
+      for (let index = 0; index < files.length; index += 1) {
+        const pageNumber = index + 1;
+        setScanProgress(10 + Math.round((index / Math.max(files.length, 1)) * 65));
+        setScanMessage(`Puter Gemini membaca halaman ${pageNumber}/${files.length}...`);
+        pages.push(await scanFileWithPuterGemini(files[index], pageNumber));
       }
 
-      const startRes = await fetch("/api/attendance/scan", { method: "POST", body: formData });
-      const startData = await safeJson<ScanJobStartResponse>(startRes);
-      if (!startData?.ok || !startData.jobId) {
-        showToast({
-          title: "Scan gagal dimulai",
-          description:
-            startData?.detail ||
-            (startData?.error === "TOO_MANY_IMAGES" ? "Terlalu banyak gambar." : "Server menolak memulai scan."),
+      const totalRows = pages.reduce((count, page) => count + (page.rows?.length ?? 0), 0);
+      setScanProgress(82);
+      setScanMessage(`Menyusun daftar review ${totalRows} baris...`);
+      const resolveController = new AbortController();
+      const resolveTimeoutId = window.setTimeout(() => resolveController.abort(), PUTER_RESOLVE_TIMEOUT_MS);
+      let response: Response;
+      try {
+        response = await fetch("/api/attendance/scan", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal: resolveController.signal,
+          body: JSON.stringify({
+            provider: "puter-gemini",
+            eventDate,
+            pages,
+          }),
         });
-        return;
-      }
-
-      let finalResult: ScanResponseData | null = null;
-
-      for (let attempt = 0; attempt < 360; attempt += 1) {
-        const response = await fetch(`/api/attendance/scan?id=${encodeURIComponent(startData.jobId)}`, {
-          cache: "no-store",
-        });
-        const job = await safeJson<ScanJobStatusResponse>(response);
-        const jobData = job?.data;
-        if (!response.ok || !jobData) {
-          throw new Error("SCAN_STATUS_FAILED");
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          throw new Error("Server terlalu lama menyusun review. Coba scan ulang atau kurangi jumlah gambar.");
         }
 
-        setScanProgress(jobData.progress);
-        setScanMessage(jobData.message);
-
-        if (jobData.status === "completed") {
-          finalResult = jobData.result ?? null;
-          break;
-        }
-
-        if (jobData.status === "failed") {
-          throw new Error(jobData.error || "OCR_SCAN_FAILED");
-        }
-
-        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        throw error;
+      } finally {
+        window.clearTimeout(resolveTimeoutId);
+      }
+      const payload = await safeJson<PuterResolveResponse>(response);
+      if (!response.ok || !payload?.ok || !payload.data) {
+        throw new Error(payload?.detail || payload?.error || "PUTER_SCAN_RESOLVE_FAILED");
       }
 
-      if (!finalResult) {
-        throw new Error("SCAN_TIMEOUT");
-      }
-
-      const nextResult = normalizeScanResponseData(finalResult);
+      const nextResult = normalizeScanResponseData(payload.data);
       const defaultSelectedCount = (nextResult?.reviewItems ?? []).filter((item) => item.selectedByDefault).length;
       setResult(nextResult);
       setSelectedIds((nextResult?.reviewItems ?? []).filter((item) => item.selectedByDefault).map((item) => item.id));
       setFiles([]);
       setInputKey((value) => value + 1);
+      setScanProgress(100);
+      setScanMessage("Scan selesai. Review hasil sebelum disimpan.");
 
       showToast({
         title: "Scan selesai",
-        description: finalResult.blocked
+        description: nextResult?.blocked
           ? "Hasil ada, tetapi belum cukup yakin untuk dipilih otomatis."
           : `${defaultSelectedCount} kandidat dari ringkasan dipilih untuk disimpan setelah review.`,
       });
@@ -364,9 +624,9 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
       showToast({
         title: "Scan gagal",
         description:
-          error instanceof Error && error.message === "OCR_TIMEOUT"
-            ? "Gambar terlalu buram atau terlalu berat diproses. Coba foto ulang dengan cahaya lebih baik."
-            : "Terjadi error saat memproses gambar.",
+          error instanceof Error
+            ? error.message
+            : "Puter Gemini tidak berhasil memproses gambar.",
         variant: "destructive",
       });
     } finally {
@@ -471,7 +731,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+      <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
         <div className="rounded-2xl border border-border/70 bg-card/60 p-4">
           <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-[hsl(var(--foreground))]">
             <FileImage size={16} className="text-primary" />
@@ -543,7 +803,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4">
+        <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 order-first md:order-none">
           <Button
             variant="outline"
             onClick={handleReadClipboard}
@@ -571,7 +831,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
             className="h-12 w-full"
           >
             {loading ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
-            {loading ? `Memproses ${scanProgress}%` : "Scan dan Review"}
+            {loading ? `Memproses ${scanProgress}%` : "Scan Puter Gemini"}
           </Button>
           <Button
             variant="secondary"
@@ -667,7 +927,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
             </div>
           ) : null}
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
             <div className="rounded-2xl border border-border/70 bg-card/60 p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">

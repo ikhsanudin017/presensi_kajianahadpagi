@@ -8,7 +8,7 @@ import {
   type AttendanceScanImageInput,
   type DetectedAttendanceCandidate,
 } from "@/lib/ocr-attendance";
-import { scanAttendanceImagesWithGemini } from "@/lib/gemini-attendance";
+import { checkGeminiAvailability, scanAttendanceImagesWithGemini } from "@/lib/gemini-attendance";
 import {
   findBestParticipantMatch,
   looksLikeHumanName,
@@ -24,7 +24,8 @@ import {
 } from "@/lib/attendance-scan-jobs";
 import { prepareAttendanceScanImages } from "@/lib/attendance-image-preprocess";
 import { processAttendanceOcrText } from "@/lib/attendance-photo-parser";
-import { scanAttendanceImagesWithVision } from "@/lib/vision-attendance";
+import { checkVisionAvailability, scanAttendanceImagesWithVision } from "@/lib/vision-attendance";
+import { detectAttendanceRowsWithSignature } from "@/lib/attendance-signature-detector";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,221 +43,36 @@ type ReviewSaveStatus = AttendanceScanJobResult["reviewItems"][number]["saveStat
 
 const NEW_PARTICIPANT_ID_PREFIX = "new:";
 
-const PRIORITY_ATTENDANCE_ROSTER = [
-  { sourceName: "Dina A", participantName: "Dina Agustina", aliases: ["Dina A", "Dina A.", "Dina Agustina"] },
-  { sourceName: "Yuli Maryani", participantName: "Yuli Maryani", aliases: ["Yuli Maryani"] },
-  { sourceName: "Sutarni", participantName: "Sutarni", aliases: ["Sutarni"] },
-  { sourceName: "Sukiyem", participantName: "Sugiyem", aliases: ["Sukiyem", "Sugiyem", "Sukijem"] },
-  { sourceName: "Amirantika", participantName: "Amirantika", aliases: ["Amirantika"] },
-  { sourceName: "Kania Adelia P", participantName: "Kania Adelia", aliases: ["Kania Adelia P", "Kania Adelia"] },
-  { sourceName: "Sutarinean", participantName: "Surarinen", aliases: ["Sutarinean", "Sutarinem", "Surarinem", "Surarinen"] },
-  { sourceName: "Indri", participantName: "Indri", aliases: ["Indri"] },
-  { sourceName: "Endah Ning", participantName: "Endah Ning", aliases: ["Endah Ning", "Endah Nin"] },
-  { sourceName: "Muti", participantName: "Muti", aliases: ["Muti", "MUTI"] },
-  { sourceName: "Sukinah", participantName: "Sukinah", aliases: ["Sukinah", "SUKINAH", "SUKINAH H"] },
-  { sourceName: "Sari", participantName: "Sari", aliases: ["Sari"] },
-  { sourceName: "Tari", participantName: "Tari", aliases: ["Tari"] },
-  { sourceName: "Arnita", participantName: "Arnita", aliases: ["Arnita"] },
-  { sourceName: "Sri in", participantName: "Sri In", aliases: ["Sri in", "Sri In"] },
-  { sourceName: "Witri", participantName: "B. Witri", aliases: ["Witri", "B Witri", "B. Witri"] },
-  { sourceName: "Tami", participantName: "Tami", aliases: ["Tami"] },
-  { sourceName: "Wawah", participantName: "Wawah", aliases: ["Wawah"] },
-  { sourceName: "Nova", participantName: "Nova", aliases: ["Nova"] },
-  { sourceName: "Bilal", participantName: "Bilal", aliases: ["Bilal"] },
-  { sourceName: "Ika", participantName: "Ika", aliases: ["Ika"] },
-  { sourceName: "Tukini", participantName: "Tukini", aliases: ["Tukini"] },
-  { sourceName: "Hasbi", participantName: "Hasbi", aliases: ["Hasbi"] },
-  { sourceName: "Wagiyem", participantName: "Wagiyem", aliases: ["Wagiyem"] },
-  { sourceName: "Liana", participantName: "Liana", aliases: ["Liana", "LIANA", "Liania"] },
-  { sourceName: "Sri Ruki", participantName: "Sri Ruwi", aliases: ["Sri Ruki", "SRI RUKI", "Sri Ruwi"] },
-  { sourceName: "Sulasmi", participantName: "Sulasmi", aliases: ["Sulasmi", "Sulami"] },
-  { sourceName: "Mariyem", participantName: "Mariyem", aliases: ["Mariyem", "Marikan", "Marikam"] },
-  { sourceName: "Mulyati", participantName: "Mulyati", aliases: ["Mulyati", "Mulkati"] },
-  { sourceName: "Mulyani", participantName: "Mulyani", aliases: ["Mulyani", "Mulfani"] },
-  { sourceName: "Yuni", participantName: "Yuni", aliases: ["Yuni"] },
-  { sourceName: "Mutia", participantName: "Mukia", aliases: ["Mutia", "Mukia"] },
-  { sourceName: "Fani", participantName: "Fani", aliases: ["Fani"] },
-  { sourceName: "Shinta", participantName: "Shinta", aliases: ["Shinta", "Shnta"] },
-  { sourceName: "Painem", participantName: "Painem", aliases: ["Painem"] },
-  { sourceName: "Muryani", participantName: "Sri Muryani", aliases: ["Muryani", "Sri Muryani"] },
-  { sourceName: "Dewi", participantName: "Dewi", aliases: ["Dewi", "Darmi", "Darni"] },
-  { sourceName: "Chasna", participantName: "Chasna", aliases: ["Chasna", "Charna"] },
-  { sourceName: "Marno", participantName: "Marno", aliases: ["Marno"] },
-  { sourceName: "Harso Surip", participantName: "Harso Surip", aliases: ["Harso Surip", "Harso"] },
-  { sourceName: "Parto Sarinah", participantName: "Parto Sahinah", aliases: ["Parto Sarinah", "Parto Sahinah", "Parjo"] },
-] as const;
+type PuterGeminiRow = {
+  rowNumber?: number | null;
+  name?: string | null;
+  addressHint?: string | null;
+  hasSignature?: boolean | string | null;
+  signatureStatus?: string | null;
+  confidence?: number | null;
+};
 
-const MASTER_ATTENDANCE_ROSTER = [
-  "Rini",
-  "Ngatinem",
-  "Mitri",
-  "Tati",
-  "Yanti",
-  "Tini",
-  "Minem",
-  "Jumini",
-  "Arnita",
-  "Mariyem",
-  "Sri",
-  "Supartini",
-  "Tri",
-  "Tarwini",
-  "Partinah",
-  "Hindun",
-  "Liana",
-  "Tarsih",
-  "Tri yani",
-  "Wagiyem",
-  "Minah",
-  "Sihyem",
-  "Samto",
-  "Partinah",
-  "Marno",
-  "Parto",
-  "Warti",
-  "Salinem",
-  "Saliyem",
-  "Tuginem",
-  "Kariyem",
-  "Sri Muryani",
-  "Sovi",
-  "Sri Ruwi",
-  "Sulastri",
-  "Manikem",
-  "Suranti",
-  "Sugiyem",
-  "Suginem",
-  "Sri Slamet",
-  "Reti",
-  "Siti Wafiah",
-  "Arul",
-  "Kasiyem",
-  "Suratin",
-  "Sakinah",
-  "Murniyati",
-  "Yatin",
-  "Muji Nurkhasanah",
-  "Endah Ning",
-  "Mbah Surip",
-  "Ngadiyem",
-  "B. Ngatinem",
-  "Kania Adelia",
-  "Amirantika",
-  "Siti",
-  "Neli",
-  "Sutarni",
-  "Wignyo",
-  "C. Esti Purwati",
-  "Marini",
-  "Bu Sutri",
-  "Bu Marni",
-  "Bu Mis",
-  "Bu Tri Sagini",
-  "Sari",
-  "Atun",
-  "Lestari",
-  "Mulyati",
-  "Marini",
-  "Wulan",
-  "B. Dani",
-  "Tanti",
-  "Tri",
-  "B. Muryani",
-  "Suliyem",
-  "Rusmi",
-  "Umi",
-  "Soppa",
-  "Isna",
-  "Afriyah",
-  "Mbah Man",
-  "Ika",
-  "Mb Dewi",
-  "Mb Tami",
-  "Mb Erni",
-  "Aska",
-  "Neo",
-  "Bilal",
-  "Chasna",
-  "Reni",
-  "Zea",
-  "Dina Agustina",
-  "Yuli Maryani",
-  "Tini",
-  "Marsih",
-  "Ira",
-  "Sofa",
-  "Suwati",
-  "Yatmi",
-  "Tukini",
-  "SabIni",
-  "Dora",
-  "Mauren",
-  "Ika",
-  "Fatiya",
-  "Nita",
-  "Rini",
-  "Mbah Surip",
-  "Dewi",
-  "Kris",
-  "Niken",
-  "Mbh Kenceng",
-  "Deka",
-  "Krismo",
-  "Reguh",
-  "Aziz",
-  "Jamal",
-  "Jamil",
-  "Abdulah MarIyo",
-  "Upik",
-  "Kumari",
-  "Bp Tukijan",
-  "Andri",
-  "Hidayat",
-  "Hamdani",
-  "Mulyono",
-  "Basuki",
-  "Maryadi",
-  "Sutarto",
-  "Sri",
-  "Kevin",
-  "Attaya",
-  "Arfan",
-  "Widodo",
-  "Purwanto",
-  "Marino",
-  "Mari",
-  "Sugino",
-  "Sarjono",
-  "Ihsan",
-  "BOim",
-  "Kholil",
-  "Nugroho",
-  "Bojonane Isni",
-  "Heri",
-  "Mujib",
-  "Lukman",
-  "Sutiyo",
-  "Manto",
-  "Tumpak",
-  "Warsito",
-  "Mbh Kendo",
-  "Dwi",
-  "Sucipto",
-  "Minto",
-  "Yulianto",
-  "Sugeng",
-  "Kusmanto",
-  "Intarto",
-  "Jumiono",
-  "Suryono",
-  "Sulamto",
-  "Ambar",
-  "Tulus",
-  "Hartanto",
-  "Suroto",
-  "Dani",
-  "Ridwan",
-] as const;
+type PuterGeminiPage = {
+  pageNumber?: number | null;
+  displayDate?: string | null;
+  detectedDate?: string | null;
+  normalizedTranscript?: string | null;
+  signedRowNumbers?: Array<number | string> | null;
+  rows?: PuterGeminiRow[] | null;
+  notes?: string | null;
+};
+
+type PuterGeminiPayload = {
+  provider?: string;
+  eventDate?: string;
+  pages?: PuterGeminiPage[];
+};
+
+// Roster arrays dihapus - sistem sekarang menggunakan database peserta dan hasil OCR/Gemini langsung
+// tanpa override hardcoded yang bisa menimpa hasil deteksi dengan nama yang salah.
+const PRIORITY_ATTENDANCE_ROSTER: readonly { sourceName: string; participantName: string; aliases: readonly string[] }[] = [];
+
+const MASTER_ATTENDANCE_ROSTER: readonly string[] = [];
 
 const DETECTED_CONFIDENCE_SCORE = { high: 3, medium: 2, low: 1 } as const;
 
@@ -344,6 +160,11 @@ function dedupeDetectedCandidates(candidates: DetectedAttendanceCandidate[]) {
   }
 
   const rowCandidates = [...byRow.values()];
+  const rowKeys = new Set(
+    rowCandidates
+      .filter((candidate) => typeof candidate.rowNumber === "number")
+      .map((candidate) => `${candidate.pageNumber}:${candidate.rowNumber}`),
+  );
   const rowCandidateNameKeys = new Set(
     rowCandidates
       .map((candidate) => normalizePersonName(candidate.resolvedName || candidate.sourceName))
@@ -352,6 +173,9 @@ function dedupeDetectedCandidates(candidates: DetectedAttendanceCandidate[]) {
   const merged = [
     ...rowCandidates,
     ...[...byName.values()].filter((candidate) => {
+      if (typeof candidate.rowNumber === "number" && rowKeys.has(`${candidate.pageNumber}:${candidate.rowNumber}`)) {
+        return false;
+      }
       const normalizedName = normalizePersonName(candidate.resolvedName || candidate.sourceName);
       return normalizedName && !rowCandidateNameKeys.has(normalizedName);
     }),
@@ -379,6 +203,48 @@ function dedupeUnresolved(items: AttendanceScanJobResult["unresolved"]) {
   }
 
   return [...unique.values()];
+}
+
+function summarizeScanWarnings(notes: string[]) {
+  const warnings: string[] = [];
+  const hasVisionBilling = notes.some((note) => /vision/i.test(note) && /billing/i.test(note));
+  const hasVisionMissingKey = notes.some((note) => /vision/i.test(note) && /api key/i.test(note));
+  const hasGeminiMissingKey = notes.some((note) => /gemini/i.test(note) && /api_key_missing/i.test(note));
+  const hasGeminiQuota = notes.some((note) => /gemini/i.test(note) && /quota|rate limit|429/i.test(note));
+  const signatureNotes = notes.filter((note) => note.startsWith("Filter TTD aktif"));
+
+  if (hasVisionBilling) {
+    warnings.push("Google Vision tidak berjalan karena billing Google Cloud belum aktif. Scan memakai OCR lokal.");
+  } else if (hasVisionMissingKey) {
+    warnings.push("Google Vision tidak berjalan karena API key belum diisi. Scan memakai OCR lokal.");
+  }
+
+  if (hasGeminiMissingKey) {
+    warnings.push("Gemini tidak berjalan karena API key belum diisi. Hasil memakai OCR lokal.");
+  } else if (hasGeminiQuota) {
+    warnings.push("Gemini tidak berjalan karena kuota/rate limit habis. Hasil memakai OCR lokal.");
+  }
+
+  for (const note of signatureNotes) {
+    if (!warnings.includes(note)) {
+      warnings.push(note);
+    }
+  }
+
+  return warnings.length > 0 ? warnings : notes.slice(0, 3);
+}
+
+async function checkCloudScanProviders() {
+  const [vision, gemini] = await Promise.all([
+    checkVisionAvailability(),
+    checkGeminiAvailability(),
+  ]);
+
+  return {
+    ok: vision.ok && gemini.ok,
+    vision,
+    gemini,
+  };
 }
 
 function findExactParticipantByName(participants: ParticipantRecord[], rawName: string) {
@@ -738,16 +604,423 @@ function parseStructuredPreviewPages(previewText: string) {
   return pages.length > 0 ? pages : [{ pageNumber: 1, text }];
 }
 
+function getCandidateRowKey(candidate: DetectedAttendanceCandidate) {
+  if (typeof candidate.rowNumber !== "number") {
+    return null;
+  }
+
+  return `${candidate.pageNumber}:${candidate.rowNumber}`;
+}
+
+function getCandidateNameKey(candidate: DetectedAttendanceCandidate) {
+  return normalizePersonName(candidate.resolvedName || candidate.sourceName);
+}
+
+function filterBackfillCandidates(
+  primaryCandidates: DetectedAttendanceCandidate[],
+  secondaryCandidates: DetectedAttendanceCandidate[],
+) {
+  const seenRowKeys = new Set(
+    primaryCandidates
+      .map((candidate) => getCandidateRowKey(candidate))
+      .filter((key): key is string => Boolean(key)),
+  );
+  const seenNameKeys = new Set(
+    primaryCandidates
+      .map((candidate) => getCandidateNameKey(candidate))
+      .filter(Boolean),
+  );
+
+  return secondaryCandidates.filter((candidate) => {
+    const rowKey = getCandidateRowKey(candidate);
+    if (rowKey && seenRowKeys.has(rowKey)) {
+      return false;
+    }
+
+    const nameKey = getCandidateNameKey(candidate);
+    if (nameKey && seenNameKeys.has(nameKey)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function buildDetectedCandidatesPreviewText(candidates: DetectedAttendanceCandidate[]) {
+  if (candidates.length === 0) {
+    return "";
+  }
+
+  const byPage = new Map<number, DetectedAttendanceCandidate[]>();
+  for (const candidate of candidates) {
+    const pageCandidates = byPage.get(candidate.pageNumber) ?? [];
+    pageCandidates.push(candidate);
+    byPage.set(candidate.pageNumber, pageCandidates);
+  }
+
+  const sections: string[] = [];
+  for (const [pageNumber, pageCandidates] of [...byPage.entries()].sort((left, right) => left[0] - right[0])) {
+    sections.push(`Halaman ${pageNumber}`);
+    for (const candidate of [...pageCandidates].sort((left, right) => {
+      const rowDiff = (left.rowNumber ?? Number.MAX_SAFE_INTEGER) - (right.rowNumber ?? Number.MAX_SAFE_INTEGER);
+      if (rowDiff !== 0) {
+        return rowDiff;
+      }
+
+      return left.resolvedName.localeCompare(right.resolvedName);
+    })) {
+      const label = toDisplayPersonName(candidate.resolvedName || candidate.sourceName);
+      sections.push(
+        typeof candidate.rowNumber === "number"
+          ? `${candidate.rowNumber}. ${label}`
+          : label,
+      );
+    }
+    sections.push("");
+  }
+
+  return sections.join("\n").trim();
+}
+
+function toPuterConfidenceLabel(value?: number | null): DetectedAttendanceCandidate["confidence"] {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "medium";
+  }
+  if (value >= 0.86) return "high";
+  if (value >= 0.62) return "medium";
+  return "low";
+}
+
+function readPuterSignatureStatus(row: PuterGeminiRow) {
+  const status = typeof row.signatureStatus === "string" ? row.signatureStatus.trim().toLowerCase() : "";
+  const rawSignature =
+    typeof row.hasSignature === "string" ? row.hasSignature.trim().toLowerCase() : row.hasSignature;
+
+  if (status === "signed" || status === "terisi" || status === "ada" || rawSignature === true || rawSignature === "true") {
+    return "signed" as const;
+  }
+
+  if (
+    status === "empty" ||
+    status === "kosong" ||
+    status === "blank" ||
+    status === "false" ||
+    rawSignature === false ||
+    rawSignature === "false"
+  ) {
+    return "empty" as const;
+  }
+
+  return "uncertain" as const;
+}
+
+function normalizePuterSignedRowNumbers(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .map((item) => {
+          if (typeof item === "number" && Number.isFinite(item)) {
+            return Math.round(item);
+          }
+          if (typeof item === "string") {
+            const match = item.match(/\d+/);
+            return match ? Number(match[0]) : NaN;
+          }
+          return NaN;
+        })
+        .filter((item) => Number.isInteger(item) && item > 0 && item <= 300),
+    ),
+  ).sort((left, right) => left - right);
+}
+
+function normalizePuterGeminiPages(value: unknown): PuterGeminiPage[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const pages: PuterGeminiPage[] = [];
+
+  for (const [index, page] of value.entries()) {
+    if (!page || typeof page !== "object") {
+      continue;
+    }
+
+    const record = page as PuterGeminiPage;
+    pages.push({
+      pageNumber:
+        typeof record.pageNumber === "number" && Number.isFinite(record.pageNumber)
+          ? record.pageNumber
+          : index + 1,
+      displayDate: typeof record.displayDate === "string" ? record.displayDate : null,
+      detectedDate: typeof record.detectedDate === "string" ? record.detectedDate : null,
+      normalizedTranscript:
+        typeof record.normalizedTranscript === "string" ? record.normalizedTranscript : null,
+      signedRowNumbers: normalizePuterSignedRowNumbers(record.signedRowNumbers),
+      notes: typeof record.notes === "string" ? record.notes : null,
+      rows: Array.isArray(record.rows) ? record.rows : [],
+    });
+  }
+
+  return pages;
+}
+
+function buildPuterCandidates(pages: PuterGeminiPage[]) {
+  const candidates: DetectedAttendanceCandidate[] = [];
+
+  for (const page of pages) {
+    const pageNumber =
+      typeof page.pageNumber === "number" && Number.isFinite(page.pageNumber)
+        ? page.pageNumber
+        : 1;
+    const readableRows = (page.rows ?? [])
+      .map((row) => ({
+        row,
+        signatureStatus: readPuterSignatureStatus(row),
+        rawName: toDisplayPersonName(String(row.name ?? "")),
+      }))
+      .filter((item) => item.rawName && looksLikeHumanName(item.rawName));
+    const signedRowNumberSet = new Set(normalizePuterSignedRowNumbers(page.signedRowNumbers));
+    const signedRows =
+      signedRowNumberSet.size > 0
+        ? readableRows.filter(
+            (item) =>
+              typeof item.row.rowNumber === "number" &&
+              signedRowNumberSet.has(Math.round(item.row.rowNumber)),
+          )
+        : readableRows.filter((item) => item.signatureStatus === "signed");
+    const rowsToUse = signedRows.length > 0 ? signedRows : readableRows;
+    const signatureFallback = signedRows.length === 0 && readableRows.length > 0;
+
+    for (const { row, rawName, signatureStatus } of rowsToUse) {
+      const rowNumber = typeof row.rowNumber === "number" && Number.isFinite(row.rowNumber)
+        ? Math.round(row.rowNumber)
+        : undefined;
+      const verifiedBySignedRowScan = typeof rowNumber === "number" && signedRowNumberSet.has(rowNumber);
+      candidates.push({
+        pageNumber,
+        rowNumber,
+        sourceName: rawName,
+        resolvedName: rawName,
+        confidence: signatureFallback ? "medium" : toPuterConfidenceLabel(row.confidence),
+        reason: signatureFallback
+          ? "Nama dibaca oleh Puter Gemini, tetapi status kolom TTD belum bisa dipastikan; masukkan review manual."
+          : verifiedBySignedRowScan
+            ? "Nama dibaca oleh Puter Gemini; nomor baris diverifikasi dari scan khusus kolom TTD."
+            : signatureStatus === "signed"
+            ? "Nama dibaca oleh Puter Gemini dari baris yang kolom TTD-nya terisi."
+            : "Nama dibaca oleh Puter Gemini dengan status TTD belum pasti; masukkan review manual.",
+        addressHint: typeof row.addressHint === "string" && row.addressHint.trim() ? row.addressHint.trim() : undefined,
+        signatureStatus: signatureFallback ? "uncertain" : "signed",
+      });
+    }
+  }
+
+  return dedupeDetectedCandidates(candidates);
+}
+
+function buildPuterSignatureWarnings(pages: PuterGeminiPage[]) {
+  const warnings: string[] = [];
+
+  for (const page of pages) {
+    const pageNumber =
+      typeof page.pageNumber === "number" && Number.isFinite(page.pageNumber)
+        ? page.pageNumber
+        : 1;
+    const readableRows = (page.rows ?? []).filter((row) => {
+      const rawName = toDisplayPersonName(String(row.name ?? ""));
+      return rawName && looksLikeHumanName(rawName);
+    });
+    if (readableRows.length === 0) {
+      continue;
+    }
+
+    const signedRowNumberSet = new Set(normalizePuterSignedRowNumbers(page.signedRowNumbers));
+    const signedRows =
+      signedRowNumberSet.size > 0
+        ? readableRows.filter(
+            (row) =>
+              typeof row.rowNumber === "number" &&
+              signedRowNumberSet.has(Math.round(row.rowNumber)),
+          )
+        : readableRows.filter((row) => readPuterSignatureStatus(row) === "signed");
+    if (signedRows.length === 0) {
+      warnings.push(
+        `Puter Gemini membaca ${readableRows.length} nama di halaman ${pageNumber}, tetapi belum bisa memastikan kolom TTD. Semua nama dimasukkan ke review.`,
+      );
+    } else if (signedRowNumberSet.size > 0 && signedRows.length !== signedRowNumberSet.size) {
+      warnings.push(
+        `Scan TTD halaman ${pageNumber} membaca ${signedRowNumberSet.size} baris bertanda tangan, tetapi ${signedRows.length} baris cocok dengan nama yang terbaca.`,
+      );
+    }
+  }
+
+  return warnings;
+}
+
+function buildPuterPreviewText(pages: PuterGeminiPage[], candidates: DetectedAttendanceCandidate[]) {
+  const fromCandidates = buildDetectedCandidatesPreviewText(candidates);
+  if (fromCandidates) {
+    return fromCandidates;
+  }
+
+  return pages
+    .map((page) => {
+      const pageNumber =
+        typeof page.pageNumber === "number" && Number.isFinite(page.pageNumber)
+          ? page.pageNumber
+          : 1;
+      const transcript = typeof page.normalizedTranscript === "string" ? page.normalizedTranscript.trim() : "";
+      return transcript ? `Halaman ${pageNumber}\n${transcript}` : "";
+    })
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+}
+
+function isConfirmedSignatureCandidate(candidate: DetectedAttendanceCandidate) {
+  return candidate.signatureStatus === "signed";
+}
+
+async function buildScanResultFromCandidates(params: {
+  eventDate: Date;
+  participants: ParticipantRecord[];
+  candidates: DetectedAttendanceCandidate[];
+  filesProcessed: number;
+  displayDate: string | null;
+  detectedEventDate: string | null;
+  previewText: string;
+  warnings?: string[];
+}) {
+  const reviewItems: AttendanceScanJobResult["reviewItems"] = [];
+  const unresolved: AttendanceScanJobResult["unresolved"] = [];
+  const participantSeenInScan = new Set<string>();
+  const resolvedCandidates = params.candidates.map((candidate, index) => ({
+    candidate,
+    index,
+    resolved: resolveCandidateToParticipant({
+      candidate,
+      participants: params.participants,
+    }),
+  }));
+  const participantIdsToCheck = Array.from(
+    new Set(
+      resolvedCandidates
+        .map((item) =>
+          item.resolved.participant && item.resolved.resolutionMethod !== "new"
+            ? item.resolved.participant.id
+            : null,
+        )
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const existingAttendances =
+    participantIdsToCheck.length > 0
+      ? await prisma.attendance.findMany({
+          where: {
+            eventDate: params.eventDate,
+            participantId: {
+              in: participantIdsToCheck,
+            },
+          },
+          select: {
+            participantId: true,
+          },
+        })
+      : [];
+  const existingParticipantIds = new Set(existingAttendances.map((attendance) => attendance.participantId));
+
+  for (const { candidate, index, resolved } of resolvedCandidates) {
+    if (!resolved.participant || !resolved.resolutionMethod) {
+      unresolved.push({
+        pageNumber: candidate.pageNumber,
+        rowNumber: candidate.rowNumber,
+        sourceName: candidate.sourceName || candidate.resolvedName,
+        reason: resolved.reason,
+      });
+      continue;
+    }
+
+    let saveStatus: ReviewSaveStatus = resolved.reviewRequired ? "REVIEW_REQUIRED" : "READY";
+    let reason = resolved.reason;
+    const participantScanKey =
+      resolved.resolutionMethod === "new"
+        ? `${NEW_PARTICIPANT_ID_PREFIX}${normalizePersonName(resolved.participant.name)}:${candidate.pageNumber}:${candidate.rowNumber ?? index}`
+        : resolved.participant.id;
+
+    if (participantSeenInScan.has(participantScanKey)) {
+      saveStatus = "DUPLICATE_IN_SCAN";
+      reason = "Peserta yang sama terdeteksi lagi pada scan yang sama, jadi tidak dipilih otomatis.";
+    } else {
+      participantSeenInScan.add(participantScanKey);
+    }
+
+    if (
+      saveStatus !== "DUPLICATE_IN_SCAN" &&
+      resolved.resolutionMethod !== "new" &&
+      existingParticipantIds.has(resolved.participant.id)
+    ) {
+      saveStatus = "ALREADY_PRESENT";
+      reason = "Peserta sudah tercatat hadir pada tanggal ini.";
+    }
+
+    reviewItems.push({
+      id: buildReviewItemId(candidate, resolved.participant.id),
+      pageNumber: candidate.pageNumber,
+      rowNumber: candidate.rowNumber,
+      sourceName: candidate.sourceName,
+      participantName: resolved.participant.name,
+      participantId: resolved.participant.id,
+      confidence: candidate.confidence,
+      resolutionMethod: resolved.resolutionMethod,
+      matchScore: resolved.matchScore > 0 ? Number(resolved.matchScore.toFixed(4)) : undefined,
+      saveStatus,
+      selectedByDefault:
+        (saveStatus === "READY" && isConfirmedSignatureCandidate(candidate)) ||
+        (saveStatus === "REVIEW_REQUIRED" &&
+          isConfirmedSignatureCandidate(candidate) &&
+          candidate.confidence !== "low"),
+      reason,
+    });
+  }
+
+  const result: AttendanceScanJobResult = {
+    summary: {
+      filesProcessed: params.filesProcessed,
+      detectedByOcr: params.candidates.length,
+      readyToSave: reviewItems.filter((item) => item.saveStatus === "READY").length,
+      reviewRequired: reviewItems.filter((item) => item.saveStatus === "REVIEW_REQUIRED").length,
+      alreadyPresent: reviewItems.filter((item) => item.saveStatus === "ALREADY_PRESENT").length,
+      duplicateInScan: reviewItems.filter((item) => item.saveStatus === "DUPLICATE_IN_SCAN").length,
+      unresolved: dedupeUnresolved(unresolved).length,
+    },
+    structured: {
+      displayDate: params.displayDate,
+      detectedEventDate: params.detectedEventDate,
+      previewText: params.previewText,
+    },
+    reviewItems,
+    unresolved: dedupeUnresolved(unresolved),
+    warnings: params.warnings ?? [],
+    blocked: false,
+  };
+
+  result.blocked = shouldUseBlockedMode(result);
+  return result;
+}
+
 function resolveCandidateToParticipant(params: {
   candidate: DetectedAttendanceCandidate;
   participants: ParticipantRecord[];
   preferRosterByRow?: boolean;
 }) {
   const { candidate, participants } = params;
-  const fromStructuredPreview = candidate.reason.toLowerCase().includes("ringkasan ocr terstruktur");
   const candidateName = toDisplayPersonName(candidate.resolvedName || candidate.sourceName);
   const sourceCandidateName = toDisplayPersonName(candidate.sourceName || candidate.resolvedName);
-  const canCreateFromStructuredPreview = fromStructuredPreview && looksLikeHumanName(candidateName);
+  const isValidHumanName = looksLikeHumanName(candidateName);
   const rowRosterName = getPriorityRosterName(candidate.rowNumber);
   const rowRosterParticipant = rowRosterName ? findExactParticipantByName(participants, rowRosterName) : null;
   const rowComparisonName = sourceCandidateName || candidateName;
@@ -773,7 +1046,7 @@ function resolveCandidateToParticipant(params: {
         reason:
           rowScore >= 0.72
             ? `Nama diarahkan oleh nomor baris ${candidate.rowNumber} dan cocok dengan roster tetap.`
-            : `Nama diarahkan oleh nomor baris ${candidate.rowNumber} pada roster tetap 41 peserta.`,
+            : `Nama diarahkan oleh nomor baris ${candidate.rowNumber} pada roster tetap.`,
       };
     }
   }
@@ -790,19 +1063,6 @@ function resolveCandidateToParticipant(params: {
     }
   }
 
-  const masterRosterMatch = fromStructuredPreview
-    ? findMasterRosterParticipantByRow({ candidate, participants })
-    : null;
-  if (masterRosterMatch) {
-    return {
-      participant: masterRosterMatch.participant,
-      resolutionMethod: "roster" as const,
-      matchScore: masterRosterMatch.score,
-      reviewRequired: false,
-      reason: `Nama diarahkan oleh nomor baris ${candidate.rowNumber} pada roster peserta master.`,
-    };
-  }
-
   const exactMatch = findExactParticipantByName(participants, candidateName);
   if (exactMatch) {
     return {
@@ -816,13 +1076,15 @@ function resolveCandidateToParticipant(params: {
 
   const fuzzyMatch = findBestParticipantMatch(candidateName, participants);
   if (!fuzzyMatch) {
-    if (canCreateFromStructuredPreview) {
+    // Tidak ada peserta yang cocok sama sekali di database.
+    // Jika nama valid, tawarkan sebagai peserta baru untuk review.
+    if (isValidHumanName) {
       return {
         participant: buildNewParticipantRecord(candidate, candidateName),
         resolutionMethod: "new" as const,
         matchScore: 1,
         reviewRequired: true,
-        reason: "Nama dari ringkasan belum ada di database; akan dibuat sebagai peserta baru saat disimpan.",
+        reason: "Nama belum ada di database; akan dibuat sebagai peserta baru saat disimpan.",
       };
     }
 
@@ -831,9 +1093,7 @@ function resolveCandidateToParticipant(params: {
       resolutionMethod: null,
       matchScore: 0,
       reviewRequired: false,
-      reason: looksLikeHumanName(candidateName)
-        ? `Nama "${candidateName}" belum menemukan pasangan peserta yang cukup kuat.`
-        : "Teks terbaca, tetapi belum cukup jelas sebagai nama peserta.",
+      reason: "Teks terbaca, tetapi belum cukup jelas sebagai nama peserta.",
     };
   }
 
@@ -849,6 +1109,22 @@ function resolveCandidateToParticipant(params: {
       : candidate.confidence === "medium"
         ? 0.78
         : 0.84;
+
+  if (
+    isValidHumanName &&
+    typeof candidate.rowNumber === "number" &&
+    candidate.rowNumber >= 1 &&
+    fuzzyMatch.reason === "fuzzy" &&
+    fuzzyMatch.score < Math.max(0.86, reviewThreshold + 0.04)
+  ) {
+    return {
+      participant: buildNewParticipantRecord(candidate, candidateName),
+      resolutionMethod: "new" as const,
+      matchScore: fuzzyMatch.score,
+      reviewRequired: true,
+      reason: `Nama OCR cukup jelas, tetapi tidak cukup aman dipaksa cocok ke "${fuzzyMatch.participant.name}" (skor ${fuzzyMatch.score.toFixed(2)}). Akan dibuat sebagai peserta baru saat disimpan.`,
+    };
+  }
 
   if (!fuzzyMatch.ambiguous && fuzzyMatch.score >= exactEnoughThreshold) {
     return {
@@ -875,23 +1151,14 @@ function resolveCandidateToParticipant(params: {
     };
   }
 
-  if (fromStructuredPreview) {
-    if (canCreateFromStructuredPreview) {
-      return {
-        participant: buildNewParticipantRecord(candidate, candidateName),
-        resolutionMethod: "new" as const,
-        matchScore: 0,
-        reviewRequired: true,
-        reason: `Nama dari ringkasan terlalu jauh dari peserta lama (skor ${fuzzyMatch.score.toFixed(2)}); akan dibuat sebagai peserta baru saat disimpan.`,
-      };
-    }
-
+  // Fuzzy match ada tapi skor terlalu rendah — tawarkan sebagai peserta baru jika valid
+  if (isValidHumanName) {
     return {
-      participant: fuzzyMatch.participant,
-      resolutionMethod: fuzzyMatch.reason,
-      matchScore: fuzzyMatch.score,
+      participant: buildNewParticipantRecord(candidate, candidateName),
+      resolutionMethod: "new" as const,
+      matchScore: 0,
       reviewRequired: true,
-      reason: `Nama dari ringkasan paling dekat ke "${fuzzyMatch.participant.name}" (skor ${fuzzyMatch.score.toFixed(2)}), ikut dipilih agar hasil ringkasan bisa disimpan setelah dicek.`,
+      reason: `Nama terlalu jauh dari peserta yang ada (skor ${fuzzyMatch.score.toFixed(2)}); akan dibuat sebagai peserta baru saat disimpan.`,
     };
   }
 
@@ -984,27 +1251,67 @@ async function runAttendanceScanJob(params: {
       confidence: item.confidence === "low" ? "medium" : item.confidence,
       reason: "Nama diparse dari ringkasan OCR terstruktur yang tampil di halaman.",
     } satisfies DetectedAttendanceCandidate));
-    const geminiStrongEnough = geminiResult.attendees.length >= 10;
-    const fallbackCandidates = [
-      ...geminiResult.attendees,
-      ...(geminiStrongEnough ? ocrResult.attendees.filter((item) => item.confidence === "high") : ocrResult.attendees),
-      ...(geminiStrongEnough
-        ? parsedVisionResult.attendees.filter((item) => item.confidence !== "low")
-        : parsedVisionResult.attendees),
-    ];
-    const mergedCandidates = normalizePriorityRosterCandidates(
-      dedupeDetectedCandidates(previewCandidates.length > 0 ? previewCandidates : fallbackCandidates),
-    );
 
-    const warnings = Array.from(
+    const geminiPrimaryCandidates = dedupeDetectedCandidates([
+      ...geminiResult.attendees,
+      ...previewCandidates,
+    ]);
+    const geminiIsActive = geminiResult.attendees.length > 0 || previewCandidates.length >= 8;
+    const visionBackfillCandidates = filterBackfillCandidates(geminiPrimaryCandidates, parsedVisionResult.attendees);
+    const ocrBackfillCandidates = filterBackfillCandidates(
+      [...geminiPrimaryCandidates, ...visionBackfillCandidates],
+      ocrResult.attendees,
+    ).filter((candidate) => typeof candidate.rowNumber === "number");
+
+    // Cloud-first:
+    // - Jika Gemini aktif, jadikan Gemini + preview sebagai sumber utama nama.
+    // - Vision dan OCR lokal hanya dipakai untuk mengisi baris yang belum tercover.
+    // - Jika Gemini tidak aktif, fallback ke semua sumber seperti biasa.
+    const allCandidates = geminiIsActive
+      ? [
+          ...geminiPrimaryCandidates,
+          ...visionBackfillCandidates,
+          ...ocrBackfillCandidates,
+        ]
+      : [
+          ...geminiResult.attendees,
+          ...previewCandidates,
+          ...parsedVisionResult.attendees,
+          ...ocrResult.attendees,
+        ];
+    const mergedCandidates = dedupeDetectedCandidates(allCandidates);
+    const signatureDetection = await detectAttendanceRowsWithSignature({
+      pages: preparedImages.map((image) => ({
+        pageNumber: image.pageNumber,
+        signatureImageBase64: image.signatureImageBase64,
+      })),
+      candidates: mergedCandidates,
+    });
+    const signatureRowKeySet = new Set(signatureDetection.presentRowKeys);
+    const filteredCandidatesBySignature =
+      signatureDetection.active && signatureRowKeySet.size > 0
+        ? mergedCandidates.filter(
+            (candidate) =>
+              typeof candidate.rowNumber === "number" &&
+              signatureRowKeySet.has(`${candidate.pageNumber}:${candidate.rowNumber}`),
+          )
+        : mergedCandidates;
+    const finalCandidates =
+      signatureDetection.active && filteredCandidatesBySignature.length > 0
+        ? dedupeDetectedCandidates(filteredCandidatesBySignature)
+        : mergedCandidates;
+
+    const rawWarnings = Array.from(
       new Set([
         ...visionResult.notes,
         ...geminiResult.notes,
         ...ocrResult.notes,
         ...parsedVisionResult.notes,
         ...parsedGeminiPreviewResult.notes,
+        ...signatureDetection.notes,
       ]),
     );
+    const warnings = summarizeScanWarnings(rawWarnings);
 
     const unresolvedSeed = dedupeUnresolved([
       ...geminiResult.skipped.map((item) => ({
@@ -1036,18 +1343,15 @@ async function runAttendanceScanJob(params: {
     const reviewItems: AttendanceScanJobResult["reviewItems"] = [];
     const unresolved: AttendanceScanJobResult["unresolved"] = [...unresolvedSeed];
     const participantSeenInScan = new Set<string>();
-    const totalCandidates = Math.max(mergedCandidates.length, 1);
-    const preferRosterByRow = shouldPreferRosterByRow(mergedCandidates);
-    const priorityRosterPreviewText = buildPriorityRosterPreviewText(mergedCandidates);
+    const totalCandidates = Math.max(finalCandidates.length, 1);
 
-    for (let index = 0; index < mergedCandidates.length; index += 1) {
-      const candidate = mergedCandidates[index];
-      setProgress(72 + (index / totalCandidates) * 24, `Menyusun review ${index + 1}/${mergedCandidates.length}...`);
+    for (let index = 0; index < finalCandidates.length; index += 1) {
+      const candidate = finalCandidates[index];
+      setProgress(72 + (index / totalCandidates) * 24, `Menyusun review ${index + 1}/${finalCandidates.length}...`);
 
       const resolved = resolveCandidateToParticipant({
         candidate,
         participants,
-        preferRosterByRow,
       });
 
       if (!resolved.participant || !resolved.resolutionMethod) {
@@ -1103,7 +1407,13 @@ async function runAttendanceScanJob(params: {
         saveStatus,
         selectedByDefault:
           saveStatus === "READY" ||
-          (saveStatus === "REVIEW_REQUIRED" && candidate.reason.toLowerCase().includes("ringkasan ocr terstruktur")),
+          (saveStatus === "REVIEW_REQUIRED" &&
+            (
+              candidate.reason.toLowerCase().includes("ringkasan ocr terstruktur") ||
+              (resolved.resolutionMethod === "new" &&
+                typeof candidate.rowNumber === "number" &&
+                candidate.confidence !== "low")
+            )),
         reason,
       });
     }
@@ -1111,7 +1421,7 @@ async function runAttendanceScanJob(params: {
     const result: AttendanceScanJobResult = {
       summary: {
         filesProcessed: params.images.length,
-        detectedByOcr: mergedCandidates.length,
+        detectedByOcr: finalCandidates.length,
         readyToSave: reviewItems.filter((item) => item.saveStatus === "READY").length,
         reviewRequired: reviewItems.filter((item) => item.saveStatus === "REVIEW_REQUIRED").length,
         alreadyPresent: reviewItems.filter((item) => item.saveStatus === "ALREADY_PRESENT").length,
@@ -1122,7 +1432,7 @@ async function runAttendanceScanJob(params: {
         displayDate: geminiResult.displayDate ?? parsedVisionResult.displayDate,
         detectedEventDate: geminiResult.detectedEventDate ?? parsedVisionResult.detectedEventDate,
         previewText:
-          priorityRosterPreviewText ||
+          (signatureDetection.active ? buildDetectedCandidatesPreviewText(finalCandidates) : "") ||
           geminiResult.previewText ||
           parsedVisionResult.previewText ||
           visionResult.pages.map((page) => page.text).join("\n\n").trim(),
@@ -1170,8 +1480,63 @@ export async function GET(req: Request) {
   return NextResponse.json({ ok: true, data: job });
 }
 
+async function handlePuterGeminiScan(req: Request) {
+  const body = (await req.json().catch(() => null)) as PuterGeminiPayload | null;
+  if (!body || body.provider !== "puter-gemini") {
+    return NextResponse.json({ ok: false, error: "INVALID_PUTER_SCAN_PAYLOAD" }, { status: 400 });
+  }
+
+  const eventDateValue = typeof body.eventDate === "string" ? body.eventDate.trim() : "";
+  const eventDate = /^\d{4}-\d{2}-\d{2}$/.test(eventDateValue) ? toEventDate(eventDateValue) : toEventDate();
+  const pages = normalizePuterGeminiPages(body.pages);
+  const candidates = buildPuterCandidates(pages);
+
+  if (pages.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "PUTER_SCAN_EMPTY", detail: "Puter Gemini belum mengembalikan halaman hasil scan." },
+      { status: 400 },
+    );
+  }
+
+  if (candidates.length === 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "PUTER_SCAN_NO_ATTENDEES",
+        detail: "Puter Gemini belum berhasil membaca baris nama dari gambar. Coba foto lebih tegak dan pastikan kolom Nama terlihat jelas.",
+      },
+      { status: 422 },
+    );
+  }
+
+  const participants = (await prisma.participant.findMany({
+    orderBy: { name: "asc" },
+  })) as ParticipantRecord[];
+  const displayDate =
+    pages.map((page) => page.displayDate).find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? null;
+  const detectedEventDate =
+    pages.map((page) => page.detectedDate).find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? null;
+  const result = await buildScanResultFromCandidates({
+    eventDate,
+    participants,
+    candidates,
+    filesProcessed: pages.length,
+    displayDate,
+    detectedEventDate,
+    previewText: buildPuterPreviewText(pages, candidates),
+    warnings: buildPuterSignatureWarnings(pages),
+  });
+
+  return NextResponse.json({ ok: true, data: result });
+}
+
 export async function POST(req: Request) {
   try {
+    const contentType = req.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return handlePuterGeminiScan(req);
+    }
+
     const formData = await req.formData();
     const eventDateValue = String(formData.get("eventDate") ?? "").trim();
     const eventDate = /^\d{4}-\d{2}-\d{2}$/.test(eventDateValue) ? toEventDate(eventDateValue) : toEventDate();
@@ -1185,6 +1550,26 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { ok: false, error: "TOO_MANY_IMAGES", detail: "Maksimal 6 gambar per scan agar proses tetap cepat." },
         { status: 400 },
+      );
+    }
+
+    const cloudProviders = await checkCloudScanProviders();
+    if (!cloudProviders.ok) {
+      const detail = [
+        "Scan membutuhkan Google Vision dan Gemini aktif.",
+        cloudProviders.vision.reason ? `Vision: ${cloudProviders.vision.reason}` : null,
+        cloudProviders.gemini.reason ? `Gemini: ${cloudProviders.gemini.reason}` : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "CLOUD_SCAN_UNAVAILABLE",
+          detail,
+        },
+        { status: 503 },
       );
     }
 

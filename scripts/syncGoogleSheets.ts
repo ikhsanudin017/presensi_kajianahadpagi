@@ -8,7 +8,7 @@ const SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
 ];
 
-function loadEnvFile(filePath: string) {
+function loadEnvFile(filePath: string, options: { override?: boolean } = {}) {
   if (!fs.existsSync(filePath)) {
     return;
   }
@@ -24,8 +24,13 @@ function loadEnvFile(filePath: string) {
       continue;
     }
     const key = trimmed.slice(0, index).trim();
-    const value = trimmed.slice(index + 1);
-    if (!(key in process.env)) {
+    const rawValue = trimmed.slice(index + 1).trim();
+    const value =
+      (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+      (rawValue.startsWith("'") && rawValue.endsWith("'"))
+        ? rawValue.slice(1, -1)
+        : rawValue;
+    if (options.override || !(key in process.env)) {
       process.env[key] = value;
     }
   }
@@ -95,7 +100,7 @@ async function ensureSheetTitles(spreadsheetId: string, pesertaTitle: string, pr
 
 async function main() {
   loadEnvFile(path.join(process.cwd(), ".env"));
-  loadEnvFile(path.join(process.cwd(), ".env.local"));
+  loadEnvFile(path.join(process.cwd(), ".env.local"), { override: true });
 
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
   const pesertaTitle = process.env.GOOGLE_SHEETS_PARTICIPANTS_SHEET_NAME ?? "Peserta";

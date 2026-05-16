@@ -4,7 +4,7 @@ type ParticipantLike = {
 };
 
 const TITLE_TOKENS = new Set([
-  "ibu", "bu", "bapak", "pak", "bpk", "ustadz", "ustad", "ust", "hj", "h",
+  "ibu", "bu", "bapak", "pak", "bpk", "bp", "ustadz", "ustad", "ust", "hj", "h",
 ]);
 
 function stripDiacritics(value: string) {

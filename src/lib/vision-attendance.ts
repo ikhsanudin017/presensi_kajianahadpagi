@@ -12,8 +12,29 @@ export type AttendanceVisionScanResult = {
   notes: string[];
 };
 
+export type AttendanceVisionAvailability = {
+  ok: boolean;
+  reason?: string;
+};
+
 function getVisionApiKey() {
   return process.env.GOOGLE_CLOUD_VISION_API_KEY || process.env.GOOGLE_API_KEY || null;
+}
+
+function getVisionErrorReason(message: string) {
+  const lower = message.toLowerCase();
+
+  if (message === "GOOGLE_CLOUD_VISION_API_KEY_MISSING") {
+    return "Google Vision API key belum diisi.";
+  }
+  if (lower.includes("requires billing to be enabled") || lower.includes("billing")) {
+    return "Google Vision belum aktif karena billing Google Cloud belum diaktifkan.";
+  }
+  if (lower.includes("permission denied") || lower.includes("forbidden")) {
+    return "Google Vision menolak request. Cek API key dan izin project.";
+  }
+
+  return `Google Vision gagal: ${message}`;
 }
 
 async function callVisionDocumentText(base64Image: string) {
@@ -73,6 +94,29 @@ function toVisionWarning(pageNumber: number, error: unknown) {
   }
 
   return `Vision halaman ${pageNumber} gagal: ${message}`;
+}
+
+export async function checkVisionAvailability(): Promise<AttendanceVisionAvailability> {
+  const apiKey = getVisionApiKey();
+  if (!apiKey) {
+    return {
+      ok: false,
+      reason: "Google Vision API key belum diisi.",
+    };
+  }
+
+  try {
+    await callVisionDocumentText(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aQW0AAAAASUVORK5CYII=",
+    );
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "VISION_REQUEST_FAILED";
+    return {
+      ok: false,
+      reason: getVisionErrorReason(message),
+    };
+  }
 }
 
 export async function scanAttendanceImagesWithVision(params: {
