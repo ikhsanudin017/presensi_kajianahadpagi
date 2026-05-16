@@ -78,6 +78,8 @@ type PuterAttendanceRow = {
 
 type PuterPageResult = {
   pageNumber: number;
+  mimeType?: string | null;
+  imageBase64?: string | null;
   displayDate?: string | null;
   detectedDate?: string | null;
   normalizedTranscript?: string | null;
@@ -408,30 +410,33 @@ async function requestPuterGeminiPage(file: File, pageNumber: number, mode: "sig
   return parseJsonObject<Omit<PuterPageResult, "pageNumber">>(text);
 }
 
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const base64 = result.includes(",") ? result.slice(result.indexOf(",") + 1) : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("IMAGE_READ_FAILED"));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function scanFileWithPuterGemini(file: File, pageNumber: number) {
-  let parsed = await requestPuterGeminiPage(file, pageNumber, "signedRows");
+  const imageBase64Promise = fileToBase64(file);
+  const parsed = await requestPuterGeminiPage(file, pageNumber, "signedRows");
 
   if (!parsed || !Array.isArray(parsed.rows)) {
     throw new Error("PUTER_GEMINI_PARSE_FAILED");
-  }
-
-  const readableRows = parsed.rows.filter((row) => row?.name);
-  if (readableRows.length === 0) {
-    const fallbackParsed = await requestPuterGeminiPage(file, pageNumber, "allRows");
-    if (fallbackParsed && Array.isArray(fallbackParsed.rows) && fallbackParsed.rows.some((row) => row?.name)) {
-      parsed = {
-        ...fallbackParsed,
-        notes: [parsed.notes, fallbackParsed.notes, "Fallback semua baris nama dipakai karena hasil awal kosong."]
-          .filter(Boolean)
-          .join(" "),
-      };
-    }
   }
 
   const rows = Array.isArray(parsed.rows) ? parsed.rows : [];
   return {
     pageNumber,
     ...parsed,
+    mimeType: file.type || "image/jpeg",
+    imageBase64: await imageBase64Promise,
     notes: [
       parsed.notes,
       `Scan sejajar TTD membaca ${rows.filter((row) => row?.name).length} baris bertanda tangan.`,

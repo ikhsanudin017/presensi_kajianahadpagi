@@ -11,6 +11,11 @@ export type PreparedAttendanceScanImage = {
   signatureImageBase64: string;
 };
 
+export type PreparedAttendanceSignatureImage = {
+  pageNumber: number;
+  signatureImageBase64: string;
+};
+
 const TABLE_LEFT_COLUMNS_RATIO = 0.64;
 
 function toBase64(buffer: Buffer) {
@@ -132,6 +137,29 @@ export async function prepareAttendanceScanImages(params: {
       visionImageBase64: toBase64(visionImage),
       fullImageBase64: toBase64(fullImage),
       headerImageBase64: toBase64(headerImage),
+      signatureImageBase64: toBase64(signatureImage),
+    });
+  }
+
+  return prepared;
+}
+
+export async function prepareAttendanceSignatureImages(params: {
+  images: AttendanceScanImageInput[];
+}) {
+  const prepared: PreparedAttendanceSignatureImage[] = [];
+
+  for (let index = 0; index < params.images.length; index += 1) {
+    const image = params.images[index];
+    const sourceBuffer = Buffer.from(image.base64Image.replace(/^data:image\/\w+;base64,/, ""), "base64");
+    const normalizedBuffer = await sharp(sourceBuffer)
+      .rotate()
+      .jpeg({ quality: 90, chromaSubsampling: "4:4:4" })
+      .toBuffer();
+    const signatureImage = await preprocessForSignatureDetection(normalizedBuffer);
+
+    prepared.push({
+      pageNumber: index + 1,
       signatureImageBase64: toBase64(signatureImage),
     });
   }

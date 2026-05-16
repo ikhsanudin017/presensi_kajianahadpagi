@@ -22,7 +22,7 @@ import {
   type AttendanceScanConfirmResult,
   type AttendanceScanJobResult,
 } from "@/lib/attendance-scan-jobs";
-import { prepareAttendanceScanImages } from "@/lib/attendance-image-preprocess";
+import { prepareAttendanceScanImages, prepareAttendanceSignatureImages } from "@/lib/attendance-image-preprocess";
 import { processAttendanceOcrText } from "@/lib/attendance-photo-parser";
 import { checkVisionAvailability, scanAttendanceImagesWithVision } from "@/lib/vision-attendance";
 import { detectAttendanceRowsWithSignature } from "@/lib/attendance-signature-detector";
@@ -54,6 +54,8 @@ type PuterGeminiRow = {
 
 type PuterGeminiPage = {
   pageNumber?: number | null;
+  mimeType?: string | null;
+  imageBase64?: string | null;
   displayDate?: string | null;
   detectedDate?: string | null;
   normalizedTranscript?: string | null;
@@ -755,6 +757,8 @@ function normalizePuterGeminiPages(value: unknown): PuterGeminiPage[] {
         typeof record.pageNumber === "number" && Number.isFinite(record.pageNumber)
           ? record.pageNumber
           : index + 1,
+      mimeType: typeof record.mimeType === "string" ? record.mimeType : null,
+      imageBase64: typeof record.imageBase64 === "string" ? record.imageBase64 : null,
       displayDate: typeof record.displayDate === "string" ? record.displayDate : null,
       detectedDate: typeof record.detectedDate === "string" ? record.detectedDate : null,
       normalizedTranscript:
@@ -883,6 +887,72 @@ function buildPuterPreviewText(pages: PuterGeminiPage[], candidates: DetectedAtt
 
 function isConfirmedSignatureCandidate(candidate: DetectedAttendanceCandidate) {
   return candidate.signatureStatus === "signed";
+}
+
+async function filterPuterCandidatesBySignaturePixels(params: {
+  pages: PuterGeminiPage[];
+  candidates: DetectedAttendanceCandidate[];
+}) {
+  const warnings = buildPuterSignatureWarnings(params.pages);
+  const imagePages = params.pages.filter(
+    (page) => typeof page.imageBase64 === "string" && page.imageBase64.trim().length > 0,
+  );
+
+  if (imagePages.length === 0 || params.candidates.length === 0) {
+    return {
+      candidates: params.candidates,
+      warnings,
+    };
+  }
+
+  const preparedImages = await prepareAttendanceSignatureImages({
+    images: imagePages.map((page, index) => ({
+      name: `puter-page-${page.pageNumber ?? index + 1}.jpg`,
+      mimeType: page.mimeType || "image/jpeg",
+      base64Image: page.imageBase64 || "",
+    })),
+  });
+  const signatureDetection = await detectAttendanceRowsWithSignature({
+    pages: preparedImages,
+    candidates: params.candidates,
+  });
+
+  warnings.push(...signatureDetection.notes);
+
+  if (!signatureDetection.active || signatureDetection.presentRowKeys.length === 0) {
+    if (params.candidates.length >= 10) {
+      warnings.push("Validasi pixel TTD belum berhasil memastikan garis tanda tangan. Auto-simpan dimatikan untuk hasil scan ini.");
+      return {
+        candidates: params.candidates.map((candidate) => ({
+          ...candidate,
+          signatureStatus: "uncertain" as const,
+          reason: `${candidate.reason} Validasi pixel TTD belum memastikan baris ini.`,
+        })),
+        warnings,
+      };
+    }
+
+    return {
+      candidates: params.candidates,
+      warnings,
+    };
+  }
+
+  const signedRowKeys = new Set(signatureDetection.presentRowKeys);
+  const filteredCandidates = params.candidates.filter(
+    (candidate) =>
+      typeof candidate.rowNumber === "number" &&
+      signedRowKeys.has(`${candidate.pageNumber}:${candidate.rowNumber}`),
+  );
+
+  warnings.push(
+    `Validasi pixel TTD: ${filteredCandidates.length} nama sejajar dari ${signatureDetection.presentRowKeys.length} baris bertanda tangan terdeteksi.`,
+  );
+
+  return {
+    candidates: filteredCandidates,
+    warnings,
+  };
 }
 
 async function buildScanResultFromCandidates(params: {
@@ -1493,7 +1563,7 @@ async function handlePuterGeminiScan(req: Request) {
   const eventDateValue = typeof body.eventDate === "string" ? body.eventDate.trim() : "";
   const eventDate = /^\d{4}-\d{2}-\d{2}$/.test(eventDateValue) ? toEventDate(eventDateValue) : toEventDate();
   const pages = normalizePuterGeminiPages(body.pages);
-  const candidates = buildPuterCandidates(pages);
+  const rawCandidates = buildPuterCandidates(pages);
 
   if (pages.length === 0) {
     return NextResponse.json(
@@ -1502,12 +1572,29 @@ async function handlePuterGeminiScan(req: Request) {
     );
   }
 
-  if (candidates.length === 0) {
+  if (rawCandidates.length === 0) {
     return NextResponse.json(
       {
         ok: false,
         error: "PUTER_SCAN_NO_ATTENDEES",
         detail: "Puter Gemini belum berhasil membaca baris nama dari gambar. Coba foto lebih tegak dan pastikan kolom Nama terlihat jelas.",
+      },
+      { status: 422 },
+    );
+  }
+
+  const signatureFiltered = await filterPuterCandidatesBySignaturePixels({
+    pages,
+    candidates: rawCandidates,
+  });
+  const candidates = signatureFiltered.candidates;
+
+  if (candidates.length === 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "PUTER_SCAN_NO_ALIGNED_SIGNATURES",
+        detail: "Nama yang dibaca Puter Gemini belum sejajar dengan baris TTD yang terdeteksi di gambar. Coba foto ulang lebih tegak dan pastikan garis tabel terlihat.",
       },
       { status: 422 },
     );
@@ -1528,7 +1615,7 @@ async function handlePuterGeminiScan(req: Request) {
     displayDate,
     detectedEventDate,
     previewText: buildPuterPreviewText(pages, candidates),
-    warnings: buildPuterSignatureWarnings(pages),
+    warnings: signatureFiltered.warnings,
   });
 
   return NextResponse.json({ ok: true, data: result });
