@@ -853,7 +853,7 @@ function buildPuterSignatureWarnings(pages: PuterGeminiPage[]) {
         : readableRows.filter((row) => readPuterSignatureStatus(row) === "signed");
     if (signedRows.length === 0) {
       warnings.push(
-        `Puter Gemini membaca ${readableRows.length} nama di halaman ${pageNumber}, tetapi belum bisa memastikan kolom TTD. Semua nama dimasukkan ke review.`,
+        `Puter Gemini membaca ${readableRows.length} nama di halaman ${pageNumber}; baris hadir divalidasi ulang dari pixel kolom TTD.`,
       );
     } else if (signedRowNumberSet.size > 0 && signedRows.length !== signedRowNumberSet.size) {
       warnings.push(
@@ -939,11 +939,18 @@ async function filterPuterCandidatesBySignaturePixels(params: {
   }
 
   const signedRowKeys = new Set(signatureDetection.presentRowKeys);
-  const filteredCandidates = params.candidates.filter(
-    (candidate) =>
-      typeof candidate.rowNumber === "number" &&
-      signedRowKeys.has(`${candidate.pageNumber}:${candidate.rowNumber}`),
-  );
+  const filteredCandidates = params.candidates
+    .filter(
+      (candidate) =>
+        typeof candidate.rowNumber === "number" &&
+        signedRowKeys.has(`${candidate.pageNumber}:${candidate.rowNumber}`),
+    )
+    .map((candidate) => ({
+      ...candidate,
+      confidence: candidate.confidence === "low" ? "medium" as const : candidate.confidence,
+      signatureStatus: "signed" as const,
+      reason: `Nama dipilih dari nomor baris ${candidate.rowNumber} yang sama dengan sel TTD bertanda tangan pada gambar.`,
+    }));
 
   warnings.push(
     `Validasi pixel TTD: ${filteredCandidates.length} nama sejajar dari ${signatureDetection.presentRowKeys.length} baris bertanda tangan terdeteksi.`,

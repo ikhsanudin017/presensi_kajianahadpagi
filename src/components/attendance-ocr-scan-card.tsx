@@ -382,20 +382,18 @@ function buildPuterPrompt(pageNumber: number, mode: "signedRows" | "allRows" = "
 
   return [
     "Anda membaca foto lembar presensi pengajian.",
-    "Tugas utama: ambil hanya peserta yang hadir berdasarkan kolom TTD.",
-    "Untuk setiap tanda tangan/coretan/tulisan di kolom TTD paling kanan, tarik garis horizontal lurus ke kiri pada baris tabel yang sama, lalu baca nomor dan nama pada baris itu.",
-    "Nama yang dikembalikan HARUS sejajar satu baris dengan tanda tangan. Jangan memakai nama dari baris atas atau baris bawah.",
-    "Jika tanda tangan berada di baris 2, nama harus dari baris 2; jika baris 3 kosong TTD, jangan ambil nama baris 3.",
-    "Jika coretan TTD melewati garis batas, pilih baris tempat pusat/coretan dominan berada. Jika masih ragu antara dua baris, jangan masukkan baris itu.",
-    "Jangan hitung garis tabel, bayangan, noda kertas, nomor halaman, atau tulisan pada kolom Nama/Alamat/No TLPHN sebagai tanda tangan.",
-    "Jangan masukkan baris yang kolom TTD-nya kosong.",
+    "Tugas utama: baca daftar tabel cetak, bukan menentukan hadir.",
+    "Baca semua baris bernomor yang terlihat dari kolom No dan Nama.",
+    "Kembalikan rowNumber persis sesuai nomor di kolom No, lalu nama pada kolom Nama di baris itu.",
+    "Jangan memakai kolom TTD untuk menentukan hadir; kolom TTD akan divalidasi server dengan pixel gambar.",
+    "Untuk semua baris, isi hasSignature null dan signatureStatus \"uncertain\".",
     "Jangan menebak nama dari alamat, nomor telepon, header, atau tanda tangan.",
-    "Jumlah rows harus sama dengan jumlah sel TTD yang benar-benar terisi tanda tangan/coretan.",
-    'Semua row yang dikembalikan wajib hasSignature true dan signatureStatus "signed".',
+    "Jangan menghapus baris hanya karena TTD kosong.",
+    "Baca sebanyak mungkin baris tabel, termasuk baris yang TTD kosong.",
     "Rapikan ejaan nama hanya jika sangat jelas dari tulisan cetak pada kolom Nama.",
     "Keluarkan hanya JSON valid tanpa markdown.",
     "Schema:",
-    '{"displayDate":null,"detectedDate":null,"normalizedTranscript":"1. Warto\\n3. Sakiman","rows":[{"rowNumber":1,"name":"Warto","addressHint":"Sawit","hasSignature":true,"signatureStatus":"signed","confidence":0.96},{"rowNumber":3,"name":"Sakiman","addressHint":"Dupuk","hasSignature":true,"signatureStatus":"signed","confidence":0.94}],"notes":"Jumlah rows = jumlah TTD terisi."}',
+    '{"displayDate":null,"detectedDate":null,"normalizedTranscript":"1. Warto\\n2. Hamdani\\n3. Sakiman","rows":[{"rowNumber":1,"name":"Warto","addressHint":"Sawit","hasSignature":null,"signatureStatus":"uncertain","confidence":0.96},{"rowNumber":2,"name":"Hamdani","addressHint":"Sawit","hasSignature":null,"signatureStatus":"uncertain","confidence":0.96},{"rowNumber":3,"name":"Sakiman","addressHint":"Dupuk","hasSignature":null,"signatureStatus":"uncertain","confidence":0.96}],"notes":"Rows berisi semua nama yang terbaca; hadir divalidasi server dari kolom TTD."}',
     `Nomor halaman gambar ini: ${pageNumber}.`,
   ].join("\n");
 }
@@ -439,7 +437,7 @@ async function scanFileWithPuterGemini(file: File, pageNumber: number) {
     imageBase64: await imageBase64Promise,
     notes: [
       parsed.notes,
-      `Scan sejajar TTD membaca ${rows.filter((row) => row?.name).length} baris bertanda tangan.`,
+      `Puter membaca ${rows.filter((row) => row?.name).length} baris nama; TTD divalidasi server dari gambar.`,
     ]
       .filter(Boolean)
       .join(" "),
