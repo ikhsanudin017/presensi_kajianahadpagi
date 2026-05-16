@@ -86,12 +86,6 @@ type PuterPageResult = {
   notes?: string | null;
 };
 
-type PuterSignatureResult = {
-  signedRowNumbers?: Array<number | string> | null;
-  count?: number | null;
-  notes?: string | null;
-};
-
 type PuterResolveResponse = {
   ok?: boolean;
   data?: ScanResponseData;
@@ -369,75 +363,42 @@ function parseJsonObject<T>(raw: string): T | null {
   }
 }
 
-function buildPuterPrompt(pageNumber: number, mode: "signature" | "allRows" = "signature") {
-  const fallbackInstructions =
-    mode === "allRows"
-      ? [
-          "Mode fallback: jika kolom TTD sulit dipastikan, tetap masukkan semua baris nama yang terlihat.",
-          'Gunakan signatureStatus "uncertain" bila tanda tangan/coretan pada baris itu tidak jelas.',
-        ]
-      : [
-          "Masukkan semua baris yang memiliki nama peserta, baik TTD terisi, kosong, maupun ragu.",
-          "Jangan membuang baris hanya karena status TTD sulit dibaca.",
-        ];
+function buildPuterPrompt(pageNumber: number, mode: "signedRows" | "allRows" = "signedRows") {
+  if (mode === "allRows") {
+    return [
+      "Anda membaca foto lembar presensi pengajian.",
+      "Mode fallback: baca semua baris nama peserta yang terlihat.",
+      "Untuk setiap baris, isi signatureStatus: signed, empty, atau uncertain berdasarkan kolom TTD pada garis horizontal baris yang sama.",
+      "Jangan menebak nama dari alamat, nomor telepon, header, atau tanda tangan.",
+      "Rapikan ejaan nama hanya jika sangat jelas dari tulisan cetak pada kolom Nama.",
+      "Keluarkan hanya JSON valid tanpa markdown.",
+      "Schema:",
+      '{"displayDate":null,"detectedDate":null,"normalizedTranscript":"1. Warto\\n2. Hamdani","rows":[{"rowNumber":1,"name":"Warto","addressHint":"Sawit","hasSignature":true,"signatureStatus":"signed","confidence":0.96},{"rowNumber":2,"name":"Hamdani","addressHint":"Sawit","hasSignature":false,"signatureStatus":"empty","confidence":0.9}],"notes":""}',
+      `Nomor halaman gambar ini: ${pageNumber}.`,
+    ].join("\n");
+  }
 
   return [
     "Anda membaca foto lembar presensi pengajian.",
-    "Fokus hanya pada kolom No, Nama, Alamat, dan TTD.",
-    "Untuk setiap baris nama, tentukan status kolom TTD pada baris yang sama.",
-    'signatureStatus harus salah satu: "signed", "empty", atau "uncertain".',
-    "hasSignature true hanya jika kolom TTD pada baris itu berisi tanda tangan/coretan/tulisan.",
-    "hasSignature false jika kolom TTD jelas kosong.",
-    "hasSignature null jika status TTD ragu atau terhalang.",
-    ...fallbackInstructions,
+    "Tugas utama: ambil hanya peserta yang hadir berdasarkan kolom TTD.",
+    "Untuk setiap tanda tangan/coretan/tulisan di kolom TTD paling kanan, tarik garis horizontal lurus ke kiri pada baris tabel yang sama, lalu baca nomor dan nama pada baris itu.",
+    "Nama yang dikembalikan HARUS sejajar satu baris dengan tanda tangan. Jangan memakai nama dari baris atas atau baris bawah.",
+    "Jika tanda tangan berada di baris 2, nama harus dari baris 2; jika baris 3 kosong TTD, jangan ambil nama baris 3.",
+    "Jika coretan TTD melewati garis batas, pilih baris tempat pusat/coretan dominan berada. Jika masih ragu antara dua baris, jangan masukkan baris itu.",
+    "Jangan hitung garis tabel, bayangan, noda kertas, nomor halaman, atau tulisan pada kolom Nama/Alamat/No TLPHN sebagai tanda tangan.",
+    "Jangan masukkan baris yang kolom TTD-nya kosong.",
     "Jangan menebak nama dari alamat, nomor telepon, header, atau tanda tangan.",
-    "Baca semua baris peserta yang terlihat, termasuk jika jumlahnya banyak.",
+    "Jumlah rows harus sama dengan jumlah sel TTD yang benar-benar terisi tanda tangan/coretan.",
+    'Semua row yang dikembalikan wajib hasSignature true dan signatureStatus "signed".',
     "Rapikan ejaan nama hanya jika sangat jelas dari tulisan cetak pada kolom Nama.",
     "Keluarkan hanya JSON valid tanpa markdown.",
     "Schema:",
-    '{"displayDate":null,"detectedDate":null,"normalizedTranscript":"1. Warto\\n2. Hamdani","rows":[{"rowNumber":1,"name":"Warto","addressHint":"Sawit","hasSignature":true,"signatureStatus":"signed","confidence":0.96},{"rowNumber":2,"name":"Hamdani","addressHint":"Sawit","hasSignature":null,"signatureStatus":"uncertain","confidence":0.82}],"notes":""}',
+    '{"displayDate":null,"detectedDate":null,"normalizedTranscript":"1. Warto\\n3. Sakiman","rows":[{"rowNumber":1,"name":"Warto","addressHint":"Sawit","hasSignature":true,"signatureStatus":"signed","confidence":0.96},{"rowNumber":3,"name":"Sakiman","addressHint":"Dupuk","hasSignature":true,"signatureStatus":"signed","confidence":0.94}],"notes":"Jumlah rows = jumlah TTD terisi."}',
     `Nomor halaman gambar ini: ${pageNumber}.`,
   ].join("\n");
 }
 
-function buildPuterSignaturePrompt(pageNumber: number) {
-  return [
-    "Anda membaca foto lembar presensi pengajian.",
-    "Tugas ini hanya menentukan nomor baris yang benar-benar memiliki tanda tangan/coretan/tulisan pada kolom TTD.",
-    "Lihat kolom TTD paling kanan saja. Cocokkan coretan/tanda tangan dengan nomor baris di kiri.",
-    "Jangan hitung garis tabel, bayangan, noda kertas, atau tulisan pada kolom Nama/Alamat/No TLPHN.",
-    "Jangan hitung baris jika kolom TTD pada baris itu kosong atau hanya terkena garis dari tanda tangan baris lain.",
-    "Jika tanda tangan melewati batas garis, pilih baris yang pusat coretannya paling dominan berada di sel TTD tersebut.",
-    "Keluarkan hanya JSON valid tanpa markdown.",
-    'Schema: {"signedRowNumbers":[1,3,5],"count":3,"notes":""}',
-    `Nomor halaman gambar ini: ${pageNumber}.`,
-  ].join("\n");
-}
-
-function normalizeSignedRowNumbers(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      value
-        .map((item) => {
-          if (typeof item === "number" && Number.isFinite(item)) {
-            return Math.round(item);
-          }
-          if (typeof item === "string") {
-            const match = item.match(/\d+/);
-            return match ? Number(match[0]) : NaN;
-          }
-          return NaN;
-        })
-        .filter((item) => Number.isInteger(item) && item > 0 && item <= 300),
-    ),
-  ).sort((left, right) => left - right);
-}
-
-async function requestPuterGeminiPage(file: File, pageNumber: number, mode: "signature" | "allRows") {
+async function requestPuterGeminiPage(file: File, pageNumber: number, mode: "signedRows" | "allRows") {
   const response = await window.puter?.ai?.chat?.(
     buildPuterPrompt(pageNumber, mode),
     file,
@@ -447,23 +408,8 @@ async function requestPuterGeminiPage(file: File, pageNumber: number, mode: "sig
   return parseJsonObject<Omit<PuterPageResult, "pageNumber">>(text);
 }
 
-async function requestPuterSignedRows(file: File, pageNumber: number) {
-  const response = await window.puter?.ai?.chat?.(
-    buildPuterSignaturePrompt(pageNumber),
-    file,
-    { model: PUTER_GEMINI_MODEL },
-  );
-  const text = extractPuterResponseText(response);
-  const parsed = parseJsonObject<PuterSignatureResult>(text);
-  return normalizeSignedRowNumbers(parsed?.signedRowNumbers);
-}
-
 async function scanFileWithPuterGemini(file: File, pageNumber: number) {
-  let parsed = await requestPuterGeminiPage(file, pageNumber, "signature");
-  const signedRowNumbers = await requestPuterSignedRows(file, pageNumber).catch((error) => {
-    console.error("PUTER_SIGNATURE_ROWS_FAILED", error);
-    return [] as number[];
-  });
+  let parsed = await requestPuterGeminiPage(file, pageNumber, "signedRows");
 
   if (!parsed || !Array.isArray(parsed.rows)) {
     throw new Error("PUTER_GEMINI_PARSE_FAILED");
@@ -486,10 +432,9 @@ async function scanFileWithPuterGemini(file: File, pageNumber: number) {
   return {
     pageNumber,
     ...parsed,
-    signedRowNumbers,
     notes: [
       parsed.notes,
-      signedRowNumbers.length > 0 ? `Scan TTD membaca ${signedRowNumbers.length} baris bertanda tangan.` : null,
+      `Scan sejajar TTD membaca ${rows.filter((row) => row?.name).length} baris bertanda tangan.`,
     ]
       .filter(Boolean)
       .join(" "),
@@ -567,7 +512,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
       for (let index = 0; index < files.length; index += 1) {
         const pageNumber = index + 1;
         setScanProgress(10 + Math.round((index / Math.max(files.length, 1)) * 65));
-        setScanMessage(`Puter Gemini membaca halaman ${pageNumber}/${files.length}...`);
+        setScanMessage(`Puter Gemini membaca TTD sejajar halaman ${pageNumber}/${files.length}...`);
         pages.push(await scanFileWithPuterGemini(files[index], pageNumber));
       }
 

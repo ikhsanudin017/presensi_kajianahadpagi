@@ -811,7 +811,7 @@ function buildPuterCandidates(pages: PuterGeminiPage[]) {
           : verifiedBySignedRowScan
             ? "Nama dibaca oleh Puter Gemini; nomor baris diverifikasi dari scan khusus kolom TTD."
             : signatureStatus === "signed"
-            ? "Nama dibaca oleh Puter Gemini dari baris yang kolom TTD-nya terisi."
+            ? "Nama dibaca oleh Puter Gemini dari baris yang sejajar langsung dengan kolom TTD terisi."
             : "Nama dibaca oleh Puter Gemini dengan status TTD belum pasti; masukkan review manual.",
         addressHint: typeof row.addressHint === "string" && row.addressHint.trim() ? row.addressHint.trim() : undefined,
         signatureStatus: signatureFallback ? "uncertain" : "signed",
@@ -946,6 +946,10 @@ async function buildScanResultFromCandidates(params: {
 
     let saveStatus: ReviewSaveStatus = resolved.reviewRequired ? "REVIEW_REQUIRED" : "READY";
     let reason = resolved.reason;
+    if (!isConfirmedSignatureCandidate(candidate)) {
+      saveStatus = "REVIEW_REQUIRED";
+      reason = "Kolom TTD belum terkonfirmasi sejajar dengan nama pada baris ini, jadi perlu dicek manual.";
+    }
     const participantScanKey =
       resolved.resolutionMethod === "new"
         ? `${NEW_PARTICIPANT_ID_PREFIX}${normalizePersonName(resolved.participant.name)}:${candidate.pageNumber}:${candidate.rowNumber ?? index}`
