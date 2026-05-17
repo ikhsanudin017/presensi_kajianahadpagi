@@ -66,9 +66,12 @@ type PuterGeminiPage = {
 
 type PuterGeminiPayload = {
   provider?: string;
+  scanMode?: string;
   eventDate?: string;
   pages?: PuterGeminiPage[];
 };
+
+type PuterScanMode = "signature" | "all-names";
 
 // Roster arrays dihapus - sistem sekarang menggunakan database peserta dan hasil OCR/Gemini langsung
 // tanpa override hardcoded yang bisa menimpa hasil deteksi dengan nama yang salah.
@@ -739,6 +742,10 @@ function normalizePuterSignedRowNumbers(value: unknown) {
   ).sort((left, right) => left - right);
 }
 
+function normalizePuterScanMode(value: unknown): PuterScanMode {
+  return value === "signature" ? "signature" : "all-names";
+}
+
 function normalizePuterGeminiPages(value: unknown): PuterGeminiPage[] {
   if (!Array.isArray(value)) {
     return [];
@@ -772,7 +779,7 @@ function normalizePuterGeminiPages(value: unknown): PuterGeminiPage[] {
   return pages;
 }
 
-function buildPuterCandidates(pages: PuterGeminiPage[]) {
+function buildPuterCandidates(pages: PuterGeminiPage[], scanMode: PuterScanMode) {
   const candidates: DetectedAttendanceCandidate[] = [];
 
   for (const page of pages) {
@@ -789,15 +796,17 @@ function buildPuterCandidates(pages: PuterGeminiPage[]) {
       .filter((item) => item.rawName && looksLikeHumanName(item.rawName));
     const signedRowNumberSet = new Set(normalizePuterSignedRowNumbers(page.signedRowNumbers));
     const signedRows =
-      signedRowNumberSet.size > 0
-        ? readableRows.filter(
-            (item) =>
-              typeof item.row.rowNumber === "number" &&
-              signedRowNumberSet.has(Math.round(item.row.rowNumber)),
-          )
-        : readableRows.filter((item) => item.signatureStatus === "signed");
-    const rowsToUse = signedRows.length > 0 ? signedRows : readableRows;
-    const signatureFallback = signedRows.length === 0 && readableRows.length > 0;
+      scanMode === "all-names"
+        ? readableRows
+        : signedRowNumberSet.size > 0
+          ? readableRows.filter(
+              (item) =>
+                typeof item.row.rowNumber === "number" &&
+                signedRowNumberSet.has(Math.round(item.row.rowNumber)),
+            )
+          : readableRows.filter((item) => item.signatureStatus === "signed");
+    const rowsToUse = scanMode === "all-names" || signedRows.length > 0 ? signedRows : readableRows;
+    const signatureFallback = scanMode !== "all-names" && signedRows.length === 0 && readableRows.length > 0;
 
     for (const { row, rawName, signatureStatus } of rowsToUse) {
       const rowNumber = typeof row.rowNumber === "number" && Number.isFinite(row.rowNumber)
@@ -810,15 +819,17 @@ function buildPuterCandidates(pages: PuterGeminiPage[]) {
         sourceName: rawName,
         resolvedName: rawName,
         confidence: signatureFallback ? "medium" : toPuterConfidenceLabel(row.confidence),
-        reason: signatureFallback
-          ? "Nama dibaca oleh Puter Gemini, tetapi status kolom TTD belum bisa dipastikan; masukkan review manual."
-          : verifiedBySignedRowScan
+        reason: scanMode === "all-names"
+          ? "Nama dibaca dari kolom Nama pada mode semua nama hadir; kolom TTD diabaikan."
+          : signatureFallback
+            ? "Nama dibaca oleh Puter Gemini, tetapi status kolom TTD belum bisa dipastikan; masukkan review manual."
+            : verifiedBySignedRowScan
             ? "Nama dibaca oleh Puter Gemini; nomor baris diverifikasi dari scan khusus kolom TTD."
             : signatureStatus === "signed"
             ? "Nama dibaca oleh Puter Gemini dari baris yang sejajar langsung dengan kolom TTD terisi."
             : "Nama dibaca oleh Puter Gemini dengan status TTD belum pasti; masukkan review manual.",
         addressHint: typeof row.addressHint === "string" && row.addressHint.trim() ? row.addressHint.trim() : undefined,
-        signatureStatus: signatureFallback ? "uncertain" : "signed",
+        signatureStatus: scanMode === "all-names" || !signatureFallback ? "signed" : "uncertain",
       });
     }
   }
@@ -1569,8 +1580,9 @@ async function handlePuterGeminiScan(req: Request) {
 
   const eventDateValue = typeof body.eventDate === "string" ? body.eventDate.trim() : "";
   const eventDate = /^\d{4}-\d{2}-\d{2}$/.test(eventDateValue) ? toEventDate(eventDateValue) : toEventDate();
+  const scanMode = normalizePuterScanMode(body.scanMode);
   const pages = normalizePuterGeminiPages(body.pages);
-  const rawCandidates = buildPuterCandidates(pages);
+  const rawCandidates = buildPuterCandidates(pages, scanMode);
 
   if (pages.length === 0) {
     return NextResponse.json(
@@ -1590,10 +1602,16 @@ async function handlePuterGeminiScan(req: Request) {
     );
   }
 
-  const signatureFiltered = await filterPuterCandidatesBySignaturePixels({
-    pages,
-    candidates: rawCandidates,
-  });
+  const signatureFiltered =
+    scanMode === "all-names"
+      ? {
+          candidates: rawCandidates,
+          warnings: ["Mode semua nama hadir aktif: semua nama yang terbaca dari kolom Nama dipilih, kolom TTD diabaikan."],
+        }
+      : await filterPuterCandidatesBySignaturePixels({
+          pages,
+          candidates: rawCandidates,
+        });
   const candidates = signatureFiltered.candidates;
 
   if (candidates.length === 0) {

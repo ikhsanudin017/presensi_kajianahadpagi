@@ -95,6 +95,8 @@ type PuterResolveResponse = {
   detail?: string;
 };
 
+type PuterScanMode = "signature" | "all-names";
+
 type SaveReviewResponse = {
   ok?: boolean;
   data?: {
@@ -365,17 +367,22 @@ function parseJsonObject<T>(raw: string): T | null {
   }
 }
 
-function buildPuterPrompt(pageNumber: number, mode: "signedRows" | "allRows" = "signedRows") {
-  if (mode === "allRows") {
+function buildPuterPrompt(pageNumber: number, mode: PuterScanMode) {
+  if (mode === "all-names") {
     return [
       "Anda membaca foto lembar presensi pengajian.",
-      "Mode fallback: baca semua baris nama peserta yang terlihat.",
-      "Untuk setiap baris, isi signatureStatus: signed, empty, atau uncertain berdasarkan kolom TTD pada garis horizontal baris yang sama.",
+      "Mode tulisan tangan: semua nama yang tertulis di kolom Nama dianggap hadir.",
+      "Abaikan kolom TTD, tanda tangan, alamat, dan nomor telepon.",
+      "Baca semua baris bernomor yang terlihat dari kolom No dan Nama.",
+      "Kembalikan rowNumber persis sesuai nomor di kolom No, lalu nama pada kolom Nama di baris itu.",
+      "Jika nama tulisan tangan kurang jelas, tetap tulis ejaan terbaik berdasarkan kolom Nama.",
+      "Untuk semua baris, isi hasSignature true dan signatureStatus \"signed\" karena semua nama dianggap hadir.",
       "Jangan menebak nama dari alamat, nomor telepon, header, atau tanda tangan.",
+      "Jangan membaca isi kolom Alamat sebagai nama peserta.",
       "Rapikan ejaan nama hanya jika sangat jelas dari tulisan cetak pada kolom Nama.",
       "Keluarkan hanya JSON valid tanpa markdown.",
       "Schema:",
-      '{"displayDate":null,"detectedDate":null,"normalizedTranscript":"1. Warto\\n2. Hamdani","rows":[{"rowNumber":1,"name":"Warto","addressHint":"Sawit","hasSignature":true,"signatureStatus":"signed","confidence":0.96},{"rowNumber":2,"name":"Hamdani","addressHint":"Sawit","hasSignature":false,"signatureStatus":"empty","confidence":0.9}],"notes":""}',
+      '{"displayDate":null,"detectedDate":null,"normalizedTranscript":"1. Dina A\\n2. Yuli Maryani\\n3. Sutarni","rows":[{"rowNumber":1,"name":"Dina A","addressHint":"Dupak Sawit","hasSignature":true,"signatureStatus":"signed","confidence":0.9},{"rowNumber":2,"name":"Yuli Maryani","addressHint":"","hasSignature":true,"signatureStatus":"signed","confidence":0.9}],"notes":"Semua nama di kolom Nama dianggap hadir."}',
       `Nomor halaman gambar ini: ${pageNumber}.`,
     ].join("\n");
   }
@@ -398,7 +405,7 @@ function buildPuterPrompt(pageNumber: number, mode: "signedRows" | "allRows" = "
   ].join("\n");
 }
 
-async function requestPuterGeminiPage(file: File, pageNumber: number, mode: "signedRows" | "allRows") {
+async function requestPuterGeminiPage(file: File, pageNumber: number, mode: PuterScanMode) {
   const response = await window.puter?.ai?.chat?.(
     buildPuterPrompt(pageNumber, mode),
     file,
@@ -421,9 +428,9 @@ function fileToBase64(file: File) {
   });
 }
 
-async function scanFileWithPuterGemini(file: File, pageNumber: number) {
+async function scanFileWithPuterGemini(file: File, pageNumber: number, mode: PuterScanMode) {
   const imageBase64Promise = fileToBase64(file);
-  const parsed = await requestPuterGeminiPage(file, pageNumber, "signedRows");
+  const parsed = await requestPuterGeminiPage(file, pageNumber, mode);
 
   if (!parsed || !Array.isArray(parsed.rows)) {
     throw new Error("PUTER_GEMINI_PARSE_FAILED");
@@ -437,7 +444,9 @@ async function scanFileWithPuterGemini(file: File, pageNumber: number) {
     imageBase64: await imageBase64Promise,
     notes: [
       parsed.notes,
-      `Puter membaca ${rows.filter((row) => row?.name).length} baris nama; TTD divalidasi server dari gambar.`,
+      mode === "all-names"
+        ? `Puter membaca ${rows.filter((row) => row?.name).length} baris nama; semua dianggap hadir.`
+        : `Puter membaca ${rows.filter((row) => row?.name).length} baris nama; TTD divalidasi server dari gambar.`,
     ]
       .filter(Boolean)
       .join(" "),
@@ -457,6 +466,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
   const [inputKey, setInputKey] = React.useState(0);
   const [result, setResult] = React.useState<ScanResponseData | null>(null);
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [scanMode, setScanMode] = React.useState<PuterScanMode>("all-names");
   const normalizedResult = React.useMemo(() => normalizeScanResponseData(result), [result]);
 
   const appendFiles = React.useCallback((incoming: File[]) => {
@@ -515,8 +525,12 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
       for (let index = 0; index < files.length; index += 1) {
         const pageNumber = index + 1;
         setScanProgress(10 + Math.round((index / Math.max(files.length, 1)) * 65));
-        setScanMessage(`Puter Gemini membaca TTD sejajar halaman ${pageNumber}/${files.length}...`);
-        pages.push(await scanFileWithPuterGemini(files[index], pageNumber));
+        setScanMessage(
+          scanMode === "all-names"
+            ? `Puter Gemini membaca semua nama halaman ${pageNumber}/${files.length}...`
+            : `Puter Gemini membaca tabel halaman ${pageNumber}/${files.length}...`,
+        );
+        pages.push(await scanFileWithPuterGemini(files[index], pageNumber, scanMode));
       }
 
       const totalRows = pages.reduce((count, page) => count + (page.rows?.length ?? 0), 0);
@@ -534,6 +548,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
           signal: resolveController.signal,
           body: JSON.stringify({
             provider: "puter-gemini",
+            scanMode,
             eventDate,
             pages,
           }),
@@ -752,6 +767,39 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
         </div>
 
         <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 order-first md:order-none">
+          <div className="rounded-xl border border-border/70 bg-background/70 p-2 text-xs">
+            <p className="mb-2 font-semibold text-[hsl(var(--foreground))]">Mode scan</p>
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={() => setScanMode("all-names")}
+                disabled={loading || saveLoading}
+                className={`rounded-lg border px-3 py-2 text-left transition ${
+                  scanMode === "all-names"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border/70 text-muted-foreground hover:border-primary/40"
+                }`}
+              >
+                <span className="block font-semibold">Semua Nama Hadir</span>
+                <span className="mt-0.5 block leading-relaxed">
+                  Default untuk tulisan tangan: semua nama di kolom Nama dianggap hadir.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScanMode("signature")}
+                disabled={loading || saveLoading}
+                className={`rounded-lg border px-3 py-2 text-left transition ${
+                  scanMode === "signature"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border/70 text-muted-foreground hover:border-primary/40"
+                }`}
+              >
+                <span className="block font-semibold">Validasi TTD</span>
+                <span className="mt-0.5 block leading-relaxed">Untuk kertas print: hadir hanya baris yang kolom TTD terisi.</span>
+              </button>
+            </div>
+          </div>
           <Button
             variant="outline"
             onClick={handleReadClipboard}
@@ -779,7 +827,7 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
             className="h-12 w-full"
           >
             {loading ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
-            {loading ? `Memproses ${scanProgress}%` : "Scan Puter Gemini"}
+            {loading ? `Memproses ${scanProgress}%` : scanMode === "all-names" ? "Scan Semua Nama" : "Scan Validasi TTD"}
           </Button>
           <Button
             variant="secondary"
@@ -806,8 +854,8 @@ export function AttendanceOcrScanCard({ eventDate, deviceId, onCompleted, onDete
             </div>
           )}
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Gunakan foto tegak, terang, dan seluruh tabel terlihat. Sistem akan mencoba baca tanggal header, kolom
-            nomor, dan kolom nama, lalu hanya memilih otomatis hasil yang cukup yakin.
+            Gunakan foto tegak, terang, dan seluruh tabel terlihat. Mode default mengabaikan kolom TTD dan menyimpan
+            semua nama yang terbaca. Pilih Validasi TTD hanya untuk kertas print yang kehadirannya ditentukan tanda tangan.
           </p>
         </div>
       </div>
